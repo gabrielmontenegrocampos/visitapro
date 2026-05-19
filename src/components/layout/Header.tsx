@@ -1,11 +1,20 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { LogOut, ChevronDown } from 'lucide-react'
+import { useRouter, usePathname } from 'next/navigation'
+import { LogOut, ChevronDown, Building2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { getInitials } from '@/lib/utils'
 import type { Profile } from '@/types/database'
+
+const PAGE_TITLES: Record<string, string> = {
+  '/dashboard':  'Dashboard',
+  '/pipeline':   'Pipeline',
+  '/agenda':     'Agenda',
+  '/leads':      'Leads',
+  '/propostas':  'Propostas',
+  '/vendedores': 'Vendedores',
+}
 
 interface HeaderProps {
   profile: Profile | null
@@ -13,6 +22,7 @@ interface HeaderProps {
 
 export default function Header({ profile }: HeaderProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
   const [open, setOpen] = useState(false)
 
@@ -24,28 +34,42 @@ export default function Header({ profile }: HeaderProps) {
 
   const name = profile?.full_name ?? 'Usuário'
   const role = profile?.role === 'admin' ? 'Administrador' : 'Vendedor'
+  const pageTitle = PAGE_TITLES[pathname] ?? 'VisitaPro'
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-end px-6 shrink-0">
+    <header className="h-14 md:h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6 shrink-0">
+      {/* Mobile: logo + título da página | Desktop: só título */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center w-7 h-7 bg-blue-600 rounded-lg md:hidden">
+          <Building2 className="w-4 h-4 text-white" />
+        </div>
+        <h1 className="font-semibold text-gray-900 text-base md:text-lg">{pageTitle}</h1>
+      </div>
+
+      {/* User menu */}
       <div className="relative">
         <button
           onClick={() => setOpen(!open)}
-          className="flex items-center gap-3 hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors"
+          className="flex items-center gap-2 hover:bg-gray-50 rounded-lg px-2 py-1.5 transition-colors"
         >
-          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
             <span className="text-xs font-bold text-white">{getInitials(name)}</span>
           </div>
           <div className="text-left hidden sm:block">
             <p className="text-sm font-medium text-gray-900 leading-none">{name}</p>
             <p className="text-xs text-gray-500 mt-0.5">{role}</p>
           </div>
-          <ChevronDown className="w-4 h-4 text-gray-400" />
+          <ChevronDown className="w-4 h-4 text-gray-400 hidden sm:block" />
         </button>
 
         {open && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-            <div className="absolute right-0 top-12 w-48 bg-white rounded-xl border border-gray-200 shadow-lg z-20 py-1">
+            <div className="absolute right-0 top-11 w-48 bg-white rounded-xl border border-gray-200 shadow-lg z-20 py-1">
+              <div className="px-4 py-2.5 border-b border-gray-100 sm:hidden">
+                <p className="text-sm font-medium text-gray-900">{name}</p>
+                <p className="text-xs text-gray-500">{role}</p>
+              </div>
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"

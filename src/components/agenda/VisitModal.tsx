@@ -61,9 +61,9 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md z-10">
+      <div className="relative bg-white w-full md:max-w-md md:rounded-2xl rounded-t-2xl shadow-2xl z-10 max-h-[92vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <h2 className="font-bold text-gray-900">{visit ? 'Editar Visita' : 'Nova Visita'}</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
@@ -71,7 +71,7 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-4">
           <div>
             <label className="label">Lead / Cliente</label>
             <select className="input" value={form.lead_id} onChange={(e) => set('lead_id', e.target.value)}>
