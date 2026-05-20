@@ -27,7 +27,7 @@ export default function KanbanBoard({ stages, leads: initialLeads }: KanbanBoard
   const [activeId, setActiveId] = useState<string | null>(null)
   const [selectedLead, setSelectedLead] = useState<LeadWithRelations | null>(null)
   const [search, setSearch] = useState('')
-  const [compact, setCompact] = useState(false)
+  const [compact, setCompact] = useState(true)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
