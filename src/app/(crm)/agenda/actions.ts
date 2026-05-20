@@ -43,11 +43,17 @@ async function syncLeadStage(leadId: string | null | undefined, visitStatus: str
   revalidatePath('/pipeline')
 }
 
+function sanitizeVisitPayload(data: Record<string, unknown>): Record<string, unknown> {
+  const { number, complement, ...rest } = data
+  const parts = [rest.address, number, complement].filter(Boolean)
+  return { ...rest, address: parts.length ? parts.join(', ') : null }
+}
+
 export async function createVisit(data: Record<string, unknown>) {
   const supabase = adminClient()
   const { data: created, error } = await supabase
     .from('visits')
-    .insert(data)
+    .insert(sanitizeVisitPayload(data))
     .select('*, leads(id, name, phone, address), profiles!visits_assigned_to_fkey(id, full_name)')
     .single()
 
@@ -63,7 +69,7 @@ export async function updateVisit(id: string, data: Record<string, unknown>) {
   const supabase = adminClient()
   const { data: updated, error } = await supabase
     .from('visits')
-    .update(data)
+    .update(sanitizeVisitPayload(data))
     .eq('id', id)
     .select('*, leads(id, name, phone, address), profiles!visits_assigned_to_fkey(id, full_name)')
     .single()
