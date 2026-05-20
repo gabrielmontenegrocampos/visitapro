@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import Sidebar from '@/components/layout/Sidebar'
 import Header from '@/components/layout/Header'
 import BottomNav from '@/components/layout/BottomNav'
+import PushPermission from '@/components/layout/PushPermission'
 
 export default async function CRMLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -30,6 +31,7 @@ export default async function CRMLayout({ children }: { children: React.ReactNod
 
       {/* Bottom nav — visível apenas no mobile */}
       <BottomNav />
+      <PushPermission />
     </div>
   )
 }
