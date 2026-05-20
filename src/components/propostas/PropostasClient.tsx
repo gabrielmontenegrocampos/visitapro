@@ -232,6 +232,7 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                     { value: '', label: 'Selecione o cliente' },
                     ...leads.map((l) => ({ value: l.id, label: l.name })),
                   ]}
+
                 />
               </div>
               <div>

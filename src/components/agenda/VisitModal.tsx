@@ -121,7 +121,11 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
               placeholder="Selecione o lead"
               options={[
                 { value: '', label: 'Selecione o lead' },
-                ...leads.map((l) => ({ value: l.id, label: l.name })),
+                ...leads.map((l) => ({
+                  value: l.id,
+                  label: l.name,
+                  subtitle: [l.phone, l.city].filter(Boolean).join(' · '),
+                })),
               ]}
             />
             {(() => {
