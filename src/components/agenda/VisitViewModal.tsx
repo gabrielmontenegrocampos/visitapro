@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { X, Pencil, Trash2, MapPin, Phone, User, Clock, Calendar, FileText, Loader2 } from 'lucide-react'
 import { updateVisit, deleteVisit } from '@/app/(crm)/agenda/actions'
-import { formatDateTime, mapsUrl, VISIT_STATUS_LABELS } from '@/lib/utils'
+import { formatDateTime, mapsUrl, whatsappUrl, VISIT_STATUS_LABELS } from '@/lib/utils'
 import type { Visit } from '@/types/database'
 
 interface VisitWithRelations extends Visit {
@@ -124,7 +124,7 @@ export default function VisitViewModal({ visit, onClose, onEdit, onDeleted, onSt
             </div>
 
             {visit.leads?.phone && (
-              <a href={`tel:${visit.leads.phone}`} className="flex items-center gap-3 text-sm text-blue-600 hover:text-blue-700">
+              <a href={whatsappUrl(visit.leads.phone) ?? '#'} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-sm text-blue-600 hover:text-blue-700">
                 <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
                   <Phone className="w-4 h-4 text-blue-500" />
                 </div>

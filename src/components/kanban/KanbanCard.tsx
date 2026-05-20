@@ -3,7 +3,7 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Phone, MapPin, GripVertical } from 'lucide-react'
-import { getInitials, formatDate, SOURCE_LABELS, mapsUrl } from '@/lib/utils'
+import { getInitials, formatDate, SOURCE_LABELS, mapsUrl, whatsappUrl } from '@/lib/utils'
 import type { PipelineStage, Lead } from '@/types/database'
 
 type LeadWithRelations = Lead & {
@@ -87,10 +87,16 @@ export default function KanbanCard({ lead, compact = false, onClick, isDragging 
         <p className="font-semibold text-gray-900 text-sm leading-tight mb-2">{lead.name}</p>
 
         {lead.phone && (
-          <div className="flex items-center gap-1.5 mb-1">
-            <Phone className="w-3 h-3 text-gray-400 shrink-0" />
-            <span className="text-xs text-gray-500">{lead.phone}</span>
-          </div>
+          <a
+            href={whatsappUrl(lead.phone) ?? '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 mb-1 hover:text-green-600 group/wa"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Phone className="w-3 h-3 text-gray-400 group-hover/wa:text-green-500 shrink-0" />
+            <span className="text-xs text-gray-500 group-hover/wa:text-green-600">{lead.phone}</span>
+          </a>
         )}
 
         {(lead.neighborhood || lead.city) && (() => {

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Plus, Search, Phone, Mail, Loader2, X, MapPin, Pencil, Trash2 } from 'lucide-react'
-import { formatDate, SOURCE_LABELS, mapsUrl } from '@/lib/utils'
+import { formatDate, SOURCE_LABELS, mapsUrl, whatsappUrl } from '@/lib/utils'
 import { maskPhone, maskCep, onlyDigits } from '@/lib/masks'
 import { createLead, updateLead, deleteLead } from '@/app/(crm)/leads/actions'
 import CepField from '@/components/ui/CepField'
@@ -223,7 +223,7 @@ export default function LeadsClient({ leads: initialLeads, stages, vendedores }:
             </div>
             <div className="space-y-1">
               {lead.phone && (
-                <a href={`tel:${lead.phone}`} onClick={(e) => e.stopPropagation()}
+                <a href={whatsappUrl(lead.phone) ?? '#'} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
                   className="flex items-center gap-2 text-sm text-blue-600">
                   <Phone className="w-3.5 h-3.5 shrink-0" />{lead.phone}
                 </a>
@@ -285,7 +285,7 @@ export default function LeadsClient({ leads: initialLeads, stages, vendedores }:
                     {lead.phone && (
                       <div className="flex items-center gap-1 text-gray-600">
                         <Phone className="w-3 h-3 text-gray-400 shrink-0" />
-                        <a href={`tel:${lead.phone}`} onClick={(e) => e.stopPropagation()}
+                        <a href={whatsappUrl(lead.phone) ?? '#'} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
                           className="hover:text-blue-600">{lead.phone}</a>
                       </div>
                     )}

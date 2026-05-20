@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { X, Phone, Mail, MapPin, Send, Loader2 } from 'lucide-react'
 import { moveLeadStage, addActivity } from '@/app/(crm)/pipeline/actions'
-import { formatDateTime, SOURCE_LABELS, mapsUrl } from '@/lib/utils'
+import { formatDateTime, SOURCE_LABELS, mapsUrl, whatsappUrl } from '@/lib/utils'
 import type { PipelineStage, Lead } from '@/types/database'
 
 type LeadWithRelations = Lead & {
@@ -107,7 +107,7 @@ export default function LeadModal({ lead, stages, onClose, onUpdate }: LeadModal
       <div className="space-y-2">
         <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Contato</p>
         {lead.phone && (
-          <a href={`tel:${lead.phone}`} className="flex items-center gap-2.5 text-sm text-blue-600 hover:text-blue-700">
+          <a href={whatsappUrl(lead.phone) ?? '#'} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 text-sm text-blue-600 hover:text-blue-700">
             <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
               <Phone className="w-4 h-4 text-blue-500" />
             </div>

@@ -55,10 +55,17 @@ export const PROPOSAL_STATUS_LABELS: Record<string, string> = {
   expirada: 'Expirada',
 }
 
+export function whatsappUrl(phone: string | null | undefined) {
+  if (!phone) return null
+  const digits = phone.replace(/\D/g, '')
+  const number = digits.startsWith('55') ? digits : `55${digits}`
+  return `https://wa.me/${number}`
+}
+
 export function mapsUrl(parts: (string | null | undefined)[]) {
   const q = parts.filter(Boolean).join(', ')
   if (!q) return null
-  return `https://maps.google.com/?q=${encodeURIComponent(q)}`
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`
 }
 
 export const VISIT_STATUS_LABELS: Record<string, string> = {
