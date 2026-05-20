@@ -7,7 +7,7 @@ import CepField, { type CepResult } from '@/components/ui/CepField'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 
 interface Vendedor { id: string; full_name: string }
-interface Lead { id: string; name: string; phone: string | null; address: string | null; neighborhood: string | null; city: string | null }
+interface Lead { id: string; name: string; phone: string | null; cep: string | null; address: string | null; neighborhood: string | null; city: string | null }
 
 interface VisitModalProps {
   visit: (Visit & { leads: { id: string; name: string } | null; profiles: { id: string; full_name: string } | null }) | null
@@ -41,7 +41,7 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
     scheduled_at: defaultDatetime,
     duration_minutes: visit?.duration_minutes ?? 60,
     status: visit?.status ?? 'agendada',
-    cep: '',
+    cep: visit?.cep ?? '',
     address: visit?.address ?? '',
     number: '',
     complement: '',
@@ -52,13 +52,14 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
-  // Auto-fill address fields when a lead is selected
+  // Auto-fill address/cep from lead when selected
   useEffect(() => {
     if (!form.lead_id) return
     const lead = leads.find((l) => l.id === form.lead_id)
     if (!lead) return
     setForm((prev) => ({
       ...prev,
+      cep: lead.cep ?? prev.cep,
       address: lead.address ?? prev.address,
       title: prev.title || lead.name,
     }))
@@ -82,6 +83,7 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
       scheduled_at: new Date(form.scheduled_at).toISOString(),
       duration_minutes: form.duration_minutes,
       status: form.status,
+      cep: form.cep.replace(/\D/g, '') || null,
       address: fullAddress || undefined,
       notes: form.notes,
     } as Partial<Visit>)

@@ -36,6 +36,7 @@ export interface Database {
           name: string
           email: string | null
           phone: string | null
+          cep: string | null
           address: string | null
           city: string | null
           neighborhood: string | null
@@ -90,6 +91,7 @@ export interface Database {
           scheduled_at: string
           duration_minutes: number
           status: 'agendada' | 'realizada' | 'cancelada' | 'reagendada'
+          cep: string | null
           address: string | null
           notes: string | null
           created_by: string | null

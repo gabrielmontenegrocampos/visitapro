@@ -15,7 +15,7 @@ import VisitViewModal from './VisitViewModal'
 import type { Visit } from '@/types/database'
 
 interface Vendedor { id: string; full_name: string }
-interface Lead { id: string; name: string; phone: string | null; address: string | null; neighborhood: string | null; city: string | null }
+interface Lead { id: string; name: string; phone: string | null; cep: string | null; address: string | null; neighborhood: string | null; city: string | null }
 interface VisitWithRelations extends Visit {
   leads: Pick<Lead, 'id' | 'name' | 'phone' | 'address'> | null
   profiles: { id: string; full_name: string } | null
