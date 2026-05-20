@@ -95,6 +95,8 @@ export interface Database {
           status: 'agendada' | 'realizada' | 'cancelada' | 'reagendada'
           cep: string | null
           address: string | null
+          number: string | null
+          complement: string | null
           notes: string | null
           created_by: string | null
           created_at: string

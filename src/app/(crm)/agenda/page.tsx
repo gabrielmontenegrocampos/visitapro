@@ -13,7 +13,7 @@ export default async function AgendaPage() {
       .select('*, leads(id, name, phone, address), profiles!visits_assigned_to_fkey(id, full_name)')
       .order('scheduled_at'),
     supabase.from('profiles').select('id, full_name').eq('active', true).order('full_name'),
-    supabase.from('leads').select('id, name, phone, cep, address, neighborhood, city').order('name').limit(200),
+    supabase.from('leads').select('id, name, phone, cep, address, number, complement, neighborhood, city').order('name').limit(200),
   ])
 
   return (

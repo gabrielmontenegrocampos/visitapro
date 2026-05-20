@@ -8,7 +8,7 @@ import { maskCep } from '@/lib/masks'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 
 interface Vendedor { id: string; full_name: string }
-interface Lead { id: string; name: string; phone: string | null; cep: string | null; address: string | null; neighborhood: string | null; city: string | null }
+interface Lead { id: string; name: string; phone: string | null; cep: string | null; address: string | null; number: string | null; complement: string | null; neighborhood: string | null; city: string | null }
 
 interface VisitModalProps {
   visit: (Visit & { leads: { id: string; name: string } | null; profiles: { id: string; full_name: string } | null }) | null
@@ -44,8 +44,8 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
     status: visit?.status ?? 'agendada',
     cep: maskCep(visit?.cep ?? ''),
     address: visit?.address ?? '',
-    number: '',
-    complement: '',
+    number: visit?.number ?? '',
+    complement: visit?.complement ?? '',
     notes: visit?.notes ?? '',
   })
 
@@ -62,6 +62,8 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
       ...prev,
       cep: maskCep(lead.cep ?? '') || prev.cep,
       address: lead.address ?? prev.address,
+      number: lead.number ?? prev.number,
+      complement: lead.complement ?? prev.complement,
       title: prev.title || lead.name,
     }))
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -76,7 +78,6 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
 
   async function handleSave() {
     setSaving(true)
-    const fullAddress = [form.address, form.number, form.complement].filter(Boolean).join(', ')
     await onSave({
       title: form.title,
       lead_id: form.lead_id || undefined,
@@ -85,7 +86,9 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
       duration_minutes: form.duration_minutes,
       status: form.status,
       cep: form.cep.trim() || null,
-      address: fullAddress || undefined,
+      address: form.address.trim() || null,
+      number: form.number.trim() || null,
+      complement: form.complement.trim() || null,
       notes: form.notes,
     } as Partial<Visit>)
     setSaving(false)
