@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { X, Trash2, Loader2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Trash2, Loader2, MapPin } from 'lucide-react'
 import type { Visit } from '@/types/database'
+import CepField, { type CepResult } from '@/components/ui/CepField'
+import SearchableSelect from '@/components/ui/SearchableSelect'
 
 interface Vendedor { id: string; full_name: string }
-interface Lead { id: string; name: string; phone: string | null; address: string | null; city: string | null }
+interface Lead { id: string; name: string; phone: string | null; address: string | null; neighborhood: string | null; city: string | null }
 
 interface VisitModalProps {
   visit: (Visit & { leads: { id: string; name: string } | null; profiles: { id: string; full_name: string } | null }) | null
@@ -15,17 +17,22 @@ interface VisitModalProps {
   onClose: () => void
   onSave: (data: Partial<Visit>) => Promise<void>
   onDelete: (id: string) => Promise<void>
+  saveError?: string | null
 }
 
-export default function VisitModal({ visit, defaultDate, vendedores, leads, onClose, onSave, onDelete }: VisitModalProps) {
+export default function VisitModal({ visit, defaultDate, vendedores, leads, onClose, onSave, onDelete, saveError }: VisitModalProps) {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  const todayAt9 = new Date()
+  todayAt9.setHours(9, 0, 0, 0)
+  const fallback = `${todayAt9.toISOString().slice(0, 10)}T09:00`
 
   const defaultDatetime = defaultDate
     ? `${defaultDate.split('T')[0]}T09:00`
     : visit?.scheduled_at
       ? new Date(visit.scheduled_at).toISOString().slice(0, 16)
-      : ''
+      : fallback
 
   const [form, setForm] = useState({
     title: visit?.title ?? '',
@@ -34,7 +41,10 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
     scheduled_at: defaultDatetime,
     duration_minutes: visit?.duration_minutes ?? 60,
     status: visit?.status ?? 'agendada',
+    cep: '',
     address: visit?.address ?? '',
+    number: '',
+    complement: '',
     notes: visit?.notes ?? '',
   })
 
@@ -42,13 +52,38 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
+  // Auto-fill address fields when a lead is selected
+  useEffect(() => {
+    if (!form.lead_id) return
+    const lead = leads.find((l) => l.id === form.lead_id)
+    if (!lead) return
+    setForm((prev) => ({
+      ...prev,
+      address: lead.address ?? prev.address,
+      title: prev.title || lead.name,
+    }))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.lead_id])
+
+  function handleCepFound(result: CepResult) {
+    setForm((prev) => ({
+      ...prev,
+      address: result.logradouro,
+    }))
+  }
+
   async function handleSave() {
     setSaving(true)
+    const fullAddress = [form.address, form.number, form.complement].filter(Boolean).join(', ')
     await onSave({
-      ...form,
-      scheduled_at: new Date(form.scheduled_at).toISOString(),
+      title: form.title,
       lead_id: form.lead_id || undefined,
       assigned_to: form.assigned_to || undefined,
+      scheduled_at: new Date(form.scheduled_at).toISOString(),
+      duration_minutes: form.duration_minutes,
+      status: form.status,
+      address: fullAddress || undefined,
+      notes: form.notes,
     } as Partial<Visit>)
     setSaving(false)
   }
@@ -74,12 +109,26 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
         <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-4">
           <div>
             <label className="label">Lead / Cliente</label>
-            <select className="input" value={form.lead_id} onChange={(e) => set('lead_id', e.target.value)}>
-              <option value="">Selecione o lead</option>
-              {leads.map((l) => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={form.lead_id}
+              onChange={(v) => set('lead_id', v)}
+              placeholder="Selecione o lead"
+              options={[
+                { value: '', label: 'Selecione o lead' },
+                ...leads.map((l) => ({ value: l.id, label: l.name })),
+              ]}
+            />
+            {(() => {
+              const lead = leads.find((l) => l.id === form.lead_id)
+              if (!lead) return null
+              const parts = [lead.neighborhood, lead.city].filter(Boolean).join(', ')
+              return (
+                <p className="mt-1.5 text-xs text-blue-600 flex items-center gap-1">
+                  <MapPin className="w-3 h-3 shrink-0" />
+                  {parts || lead.address || 'Endereço preenchido abaixo'}
+                </p>
+              )
+            })()}
           </div>
 
           <div>
@@ -117,32 +166,66 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
 
           <div>
             <label className="label">Vendedor responsável</label>
-            <select className="input" value={form.assigned_to} onChange={(e) => set('assigned_to', e.target.value)}>
-              <option value="">Sem responsável</option>
-              {vendedores.map((v) => (
-                <option key={v.id} value={v.id}>{v.full_name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={form.assigned_to}
+              onChange={(v) => set('assigned_to', v)}
+              placeholder="Sem responsável"
+              options={[
+                { value: '', label: 'Sem responsável' },
+                ...vendedores.map((v) => ({ value: v.id, label: v.full_name })),
+              ]}
+            />
           </div>
 
           <div>
             <label className="label">Status</label>
-            <select className="input" value={form.status} onChange={(e) => set('status', e.target.value)}>
-              <option value="agendada">Agendada</option>
-              <option value="realizada">Realizada</option>
-              <option value="cancelada">Cancelada</option>
-              <option value="reagendada">Reagendada</option>
-            </select>
+            <SearchableSelect
+              value={form.status}
+              onChange={(v) => set('status', v)}
+              options={[
+                { value: 'agendada', label: 'Agendada' },
+                { value: 'realizada', label: 'Realizada' },
+                { value: 'cancelada', label: 'Cancelada' },
+                { value: 'reagendada', label: 'Reagendada' },
+              ]}
+            />
           </div>
 
+          <CepField
+            value={form.cep}
+            onChange={(v) => set('cep', v)}
+            onFound={handleCepFound}
+          />
+
           <div>
-            <label className="label">Endereço da visita</label>
+            <label className="label">Logradouro</label>
             <input
               className="input"
-              placeholder="Rua, número, bairro..."
+              placeholder="Rua / Av..."
               value={form.address}
               onChange={(e) => set('address', e.target.value)}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Número</label>
+              <input
+                className="input"
+                placeholder="Ex: 100"
+                value={form.number}
+                onChange={(e) => set('number', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="label">Complemento</label>
+              <input
+                className="input"
+                placeholder="Apto, sala..."
+                value={form.complement}
+                onChange={(e) => set('complement', e.target.value)}
+              />
+            </div>
           </div>
 
           <div>
@@ -156,6 +239,12 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
             />
           </div>
         </div>
+
+        {saveError && (
+          <div className="px-5 pt-3">
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>
+          </div>
+        )}
 
         <div className="flex items-center justify-between p-5 border-t border-gray-100 gap-3">
           {visit && (

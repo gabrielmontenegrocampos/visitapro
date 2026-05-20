@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Plus, Search, X, Loader2, CheckCircle, XCircle, Clock, FileText, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate, formatCurrency, PROPOSAL_STATUS_LABELS } from '@/lib/utils'
+import SearchableSelect from '@/components/ui/SearchableSelect'
 import type { Proposal } from '@/types/database'
 
 interface Lead { id: string; name: string }
@@ -109,10 +110,16 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input className="input pl-9 w-full" placeholder="Buscar cliente ou título..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">Todos</option>
-          {Object.entries(PROPOSAL_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
+        <SearchableSelect
+          className="w-auto min-w-[130px]"
+          value={statusFilter}
+          onChange={setStatusFilter}
+          placeholder="Todos"
+          options={[
+            { value: '', label: 'Todos' },
+            ...Object.entries(PROPOSAL_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v })),
+          ]}
+        />
         <button onClick={() => setShowForm(true)} className="btn-primary flex items-center gap-2 text-sm whitespace-nowrap">
           <Plus className="w-4 h-4" />
           <span className="hidden sm:inline">Nova Proposta</span>
@@ -144,13 +151,11 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
 
               <div className="pt-2 border-t border-gray-100">
                 <label className="text-xs text-gray-500 mb-1 block">Atualizar status</label>
-                <select
+                <SearchableSelect
                   value={p.status}
-                  onChange={(e) => updateStatus(p.id, e.target.value as Proposal['status'])}
-                  className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 w-full focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  {Object.entries(PROPOSAL_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
+                  onChange={(v) => updateStatus(p.id, v as Proposal['status'])}
+                  options={Object.entries(PROPOSAL_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                />
               </div>
             </div>
           )
@@ -190,13 +195,11 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatDate(p.created_at)}</td>
                     <td className="px-4 py-3">
-                      <select
+                      <SearchableSelect
                         value={p.status}
-                        onChange={(e) => updateStatus(p.id, e.target.value as Proposal['status'])}
-                        className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      >
-                        {Object.entries(PROPOSAL_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                      </select>
+                        onChange={(v) => updateStatus(p.id, v as Proposal['status'])}
+                        options={Object.entries(PROPOSAL_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                      />
                     </td>
                   </tr>
                 )
@@ -221,10 +224,15 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
             <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-3">
               <div>
                 <label className="label">Cliente *</label>
-                <select className="input" value={form.lead_id} onChange={(e) => set('lead_id', e.target.value)}>
-                  <option value="">Selecione o cliente</option>
-                  {leads.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                </select>
+                <SearchableSelect
+                  value={form.lead_id}
+                  onChange={(v) => set('lead_id', v)}
+                  placeholder="Selecione o cliente"
+                  options={[
+                    { value: '', label: 'Selecione o cliente' },
+                    ...leads.map((l) => ({ value: l.id, label: l.name })),
+                  ]}
+                />
               </div>
               <div>
                 <label className="label">Título *</label>
@@ -246,9 +254,11 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
               </div>
               <div>
                 <label className="label">Status inicial</label>
-                <select className="input" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                  {Object.entries(PROPOSAL_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
+                <SearchableSelect
+                  value={form.status}
+                  onChange={(v) => set('status', v)}
+                  options={Object.entries(PROPOSAL_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                />
               </div>
             </div>
             <div className="flex gap-3 p-4 md:p-5 border-t border-gray-100">

@@ -23,7 +23,7 @@ export default async function CRMLayout({ children }: { children: React.ReactNod
 
       <div className="flex flex-col flex-1 overflow-hidden min-w-0">
         <Header profile={profile} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 md:pb-6">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6">
           {children}
         </main>
       </div>

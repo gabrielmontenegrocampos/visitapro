@@ -10,10 +10,10 @@ export default async function AgendaPage() {
   const [visitsRes, vendedoresRes, leadsRes] = await Promise.all([
     supabase
       .from('visits')
-      .select('*, leads(id, name, phone, address), profiles(id, full_name)')
+      .select('*, leads(id, name, phone, address), profiles!visits_assigned_to_fkey(id, full_name)')
       .order('scheduled_at'),
     supabase.from('profiles').select('id, full_name').eq('active', true).order('full_name'),
-    supabase.from('leads').select('id, name, phone, address, city').order('name').limit(200),
+    supabase.from('leads').select('id, name, phone, address, neighborhood, city').order('name').limit(200),
   ])
 
   return (

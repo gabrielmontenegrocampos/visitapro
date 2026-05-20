@@ -55,6 +55,12 @@ export const PROPOSAL_STATUS_LABELS: Record<string, string> = {
   expirada: 'Expirada',
 }
 
+export function mapsUrl(parts: (string | null | undefined)[]) {
+  const q = parts.filter(Boolean).join(', ')
+  if (!q) return null
+  return `https://maps.google.com/?q=${encodeURIComponent(q)}`
+}
+
 export const VISIT_STATUS_LABELS: Record<string, string> = {
   agendada: 'Agendada',
   realizada: 'Realizada',

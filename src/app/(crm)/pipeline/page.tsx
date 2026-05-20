@@ -20,7 +20,7 @@ export default async function PipelinePage() {
         <h1 className="text-2xl font-bold text-gray-900">Pipeline</h1>
         <p className="text-gray-500 text-sm mt-1">Gerencie seus leads por estágio de negociação</p>
       </div>
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden flex flex-col">
         <KanbanBoard
           stages={stagesRes.data ?? []}
           leads={leadsRes.data ?? []}

@@ -24,3 +24,18 @@
 .fc .fc-button:hover { background-color: #1d4ed8 !important; }
 .fc .fc-day-today { background-color: #eff6ff !important; }
 .fc-event { cursor: pointer !important; border-radius: 4px !important; font-size: 0.75rem !important; }
+
+/* Mobile calendar tweaks */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+@media (max-width: 767px) {
+  .fc .fc-toolbar { flex-wrap: nowrap; gap: 4px; }
+  .fc .fc-toolbar-title { font-size: 0.875rem !important; }
+  .fc .fc-button { padding: 4px 8px !important; font-size: 0.7rem !important; }
+  .fc .fc-timegrid-slot { height: 40px !important; }
+  .fc .fc-timegrid-slot-label { font-size: 0.65rem !important; }
+  .fc-event { font-size: 0.7rem !important; padding: 2px 4px !important; }
+  .fc .fc-footer-toolbar { justify-content: center; gap: 4px; margin-top: 8px; }
+  .fc .fc-footer-toolbar .fc-button-group { gap: 4px; }
+}

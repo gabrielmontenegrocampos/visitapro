@@ -83,7 +83,7 @@ export interface Database {
       visits: {
         Row: {
           id: string
-          lead_id: string
+          lead_id: string | null
           assigned_to: string | null
           title: string
           description: string | null
