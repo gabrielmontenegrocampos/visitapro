@@ -13,9 +13,10 @@ function adminClient() {
 }
 
 export async function GET(req: Request) {
-  const auth = req.headers.get('authorization')
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { searchParams } = new URL(req.url)
+  const secret = searchParams.get('secret') ?? req.headers.get('authorization')?.replace('Bearer ', '')
+  if (secret !== process.env.CRON_SECRET) {
+    return NextResponse.json({ error: 'Unauthorized', env: !!process.env.CRON_SECRET }, { status: 401 })
   }
 
   webpush.setVapidDetails(
