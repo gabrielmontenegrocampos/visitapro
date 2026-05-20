@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Plus, Search, Phone, Mail, Loader2, X, MapPin, Pencil, Trash2 } from 'lucide-react'
 import { formatDate, SOURCE_LABELS, mapsUrl } from '@/lib/utils'
-import { maskPhone, onlyDigits } from '@/lib/masks'
+import { maskPhone, maskCep, onlyDigits } from '@/lib/masks'
 import { createLead, updateLead, deleteLead } from '@/app/(crm)/leads/actions'
 import CepField from '@/components/ui/CepField'
 import type { CepResult } from '@/components/ui/CepField'
@@ -37,10 +37,10 @@ function leadToForm(lead: LeadWithRelations) {
     name: lead.name ?? '',
     email: lead.email ?? '',
     phone: lead.phone ?? '',
-    cep: lead.cep ?? '',
+    cep: maskCep(lead.cep ?? ''),
     address: lead.address ?? '',
-    number: '',
-    complement: '',
+    number: lead.number ?? '',
+    complement: lead.complement ?? '',
     neighborhood: lead.neighborhood ?? '',
     city: lead.city ?? '',
     state: '',
@@ -105,16 +105,14 @@ export default function LeadsClient({ leads: initialLeads, stages, vendedores }:
   }
 
   function buildPayload() {
-    const fullAddress = form.number
-      ? [form.address, form.number, form.complement].filter(Boolean).join(', ')
-      : form.address.trim() || null
-
     return {
       name: form.name.trim(),
       email: form.email.trim() || null,
       phone: onlyDigits(form.phone) ? form.phone : null,
-      cep: form.cep.replace(/\D/g, '').padEnd(0) || null,
-      address: fullAddress || null,
+      cep: form.cep.trim() || null,
+      address: form.address.trim() || null,
+      number: form.number.trim() || null,
+      complement: form.complement.trim() || null,
       city: form.city.trim() || null,
       neighborhood: form.neighborhood.trim() || null,
       source: form.source,
@@ -237,13 +235,13 @@ export default function LeadsClient({ leads: initialLeads, stages, vendedores }:
                 </a>
               )}
               {lead.city && (() => {
-                const url = mapsUrl([lead.address, lead.neighborhood, lead.city])
+                const url = mapsUrl([lead.address, lead.number, lead.neighborhood, lead.city])
                 return (
                   <a href={url ?? '#'} target="_blank" rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     className="flex items-center gap-2 text-sm text-blue-600">
                     <MapPin className="w-3.5 h-3.5 shrink-0" />
-                    {[lead.neighborhood, lead.city].filter(Boolean).join(', ')}
+                    {[lead.address, lead.number, lead.neighborhood, lead.city].filter(Boolean).join(', ')}
                   </a>
                 )
               })()}
@@ -300,13 +298,13 @@ export default function LeadsClient({ leads: initialLeads, stages, vendedores }:
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {(lead.neighborhood || lead.city) ? (
-                      <a href={mapsUrl([lead.address, lead.neighborhood, lead.city]) ?? '#'}
+                    {(lead.address || lead.city) ? (
+                      <a href={mapsUrl([lead.address, lead.number, lead.neighborhood, lead.city]) ?? '#'}
                         target="_blank" rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
                         className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm">
                         <MapPin className="w-3 h-3 shrink-0" />
-                        {[lead.neighborhood, lead.city].filter(Boolean).join(', ')}
+                        {[lead.address, lead.number, lead.neighborhood, lead.city].filter(Boolean).join(', ')}
                       </a>
                     ) : <span className="text-gray-400">—</span>}
                   </td>

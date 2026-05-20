@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { X, Trash2, Loader2, MapPin } from 'lucide-react'
 import type { Visit } from '@/types/database'
 import CepField, { type CepResult } from '@/components/ui/CepField'
+import { maskCep } from '@/lib/masks'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 
 interface Vendedor { id: string; full_name: string }
@@ -41,7 +42,7 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
     scheduled_at: defaultDatetime,
     duration_minutes: visit?.duration_minutes ?? 60,
     status: visit?.status ?? 'agendada',
-    cep: visit?.cep ?? '',
+    cep: maskCep(visit?.cep ?? ''),
     address: visit?.address ?? '',
     number: '',
     complement: '',
@@ -59,7 +60,7 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
     if (!lead) return
     setForm((prev) => ({
       ...prev,
-      cep: lead.cep ?? prev.cep,
+      cep: maskCep(lead.cep ?? '') || prev.cep,
       address: lead.address ?? prev.address,
       title: prev.title || lead.name,
     }))
@@ -83,7 +84,7 @@ export default function VisitModal({ visit, defaultDate, vendedores, leads, onCl
       scheduled_at: new Date(form.scheduled_at).toISOString(),
       duration_minutes: form.duration_minutes,
       status: form.status,
-      cep: form.cep.replace(/\D/g, '') || null,
+      cep: form.cep.trim() || null,
       address: fullAddress || undefined,
       notes: form.notes,
     } as Partial<Visit>)

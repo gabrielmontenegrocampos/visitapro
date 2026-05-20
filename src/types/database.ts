@@ -38,6 +38,8 @@ export interface Database {
           phone: string | null
           cep: string | null
           address: string | null
+          number: string | null
+          complement: string | null
           city: string | null
           neighborhood: string | null
           source: 'google_ads' | 'indicacao' | 'site' | 'telefone' | 'outro'
