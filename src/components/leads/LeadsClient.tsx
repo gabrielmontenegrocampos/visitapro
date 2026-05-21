@@ -362,25 +362,24 @@ export default function LeadsClient({ leads: initialLeads, stages, vendedores }:
               <div>
                 <label className="label">Nome completo *</label>
                 <input className="input" placeholder="Nome do cliente" value={form.name}
-                  onChange={(e) => set('name', e.target.value)} autoFocus />
+                  onChange={(e) => set('name', e.target.value)} />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Telefone</label>
-                  <div className="relative">
-                    <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    <input className="input pl-9" placeholder="(11) 9 9999-9999" value={form.phone}
-                      onChange={handlePhoneChange} inputMode="tel" maxLength={16} />
-                  </div>
+              <div>
+                <label className="label">Telefone</label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <input className="input pl-9" placeholder="(11) 9 9999-9999" value={form.phone}
+                    onChange={handlePhoneChange} inputMode="tel" maxLength={16} />
                 </div>
-                <div>
-                  <label className="label">E-mail</label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    <input className="input pl-9" type="email" placeholder="email@exemplo.com" value={form.email}
-                      onChange={(e) => set('email', e.target.value)} inputMode="email" autoCapitalize="none" />
-                  </div>
+              </div>
+
+              <div>
+                <label className="label">E-mail</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <input className="input pl-9" type="email" placeholder="email@exemplo.com" value={form.email}
+                    onChange={(e) => set('email', e.target.value)} inputMode="email" autoCapitalize="none" />
                 </div>
               </div>
 
@@ -399,46 +398,45 @@ export default function LeadsClient({ leads: initialLeads, stages, vendedores }:
                   onChange={(e) => set('address', e.target.value)} />
               </div>
 
-              <div>
-                <label className="label">Complemento</label>
-                <input className="input" placeholder="Apto, Bloco, Casa..." value={form.complement}
-                  onChange={(e) => set('complement', e.target.value)} />
-              </div>
-
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Complemento</label>
+                  <input className="input" placeholder="Apto, Bloco..." value={form.complement}
+                    onChange={(e) => set('complement', e.target.value)} />
+                </div>
                 <div>
                   <label className="label">Bairro</label>
                   <input className="input" placeholder="Bairro" value={form.neighborhood}
                     onChange={(e) => set('neighborhood', e.target.value)} />
                 </div>
-                <div>
-                  <label className="label">Cidade</label>
-                  <input className="input" placeholder="Cidade" value={form.city}
-                    onChange={(e) => set('city', e.target.value)} />
-                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Origem</label>
-                  <SearchableSelect
-                    value={form.source}
-                    onChange={(v) => set('source', v)}
-                    options={SOURCES.map((s) => ({ value: s, label: SOURCE_LABELS[s] }))}
-                  />
-                </div>
-                <div>
-                  <label className="label">Estágio</label>
-                  <SearchableSelect
-                    value={form.stage_id}
-                    onChange={(v) => set('stage_id', v)}
-                    placeholder="Sem estágio"
-                    options={[
-                      { value: '', label: 'Sem estágio' },
-                      ...stages.map((s) => ({ value: s.id, label: s.name })),
-                    ]}
-                  />
-                </div>
+              <div>
+                <label className="label">Cidade</label>
+                <input className="input" placeholder="Cidade" value={form.city}
+                  onChange={(e) => set('city', e.target.value)} />
+              </div>
+
+              <div>
+                <label className="label">Origem</label>
+                <SearchableSelect
+                  value={form.source}
+                  onChange={(v) => set('source', v)}
+                  options={SOURCES.map((s) => ({ value: s, label: SOURCE_LABELS[s] }))}
+                />
+              </div>
+
+              <div>
+                <label className="label">Estágio</label>
+                <SearchableSelect
+                  value={form.stage_id}
+                  onChange={(v) => set('stage_id', v)}
+                  placeholder="Sem estágio"
+                  options={[
+                    { value: '', label: 'Sem estágio' },
+                    ...stages.map((s) => ({ value: s.id, label: s.name })),
+                  ]}
+                />
               </div>
 
               <div>
