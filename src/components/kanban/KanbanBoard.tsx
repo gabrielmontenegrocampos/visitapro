@@ -31,7 +31,7 @@ export default function KanbanBoard({ stages, leads: initialLeads }: KanbanBoard
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 12 } })
   )
 
   const visibleLeads = search.trim()
@@ -49,8 +49,15 @@ export default function KanbanBoard({ stages, leads: initialLeads }: KanbanBoard
 
   const activeLead = activeId ? leads.find((l) => l.id === activeId) : null
 
+  function vibrate(pattern: number | number[]) {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(pattern)
+    }
+  }
+
   function handleDragStart(event: DragStartEvent) {
     setActiveId(event.active.id as string)
+    vibrate(40)
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -63,6 +70,7 @@ export default function KanbanBoard({ stages, leads: initialLeads }: KanbanBoard
     if (!lead || lead.stage_id === targetStageId) return
     const targetStage = stages.find((s) => s.id === targetStageId)
     if (!targetStage) return
+    vibrate([30, 30, 60])
     setLeads((prev) =>
       prev.map((l) => l.id === leadId ? { ...l, stage_id: targetStageId, pipeline_stages: targetStage } : l)
     )

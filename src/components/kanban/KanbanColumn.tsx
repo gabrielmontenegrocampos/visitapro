@@ -100,10 +100,11 @@ export default function KanbanColumn({ stage, leads, allLeads, compact, onLeadCl
         {/* Drop zone */}
         <div
           ref={setNodeRef}
-          className={`flex-1 rounded-b-xl p-2 transition-all min-h-[80px] ${compact ? 'space-y-1' : 'space-y-2'}`}
+          className={`flex-1 rounded-b-xl p-2 transition-all min-h-[120px] ${compact ? 'space-y-1.5' : 'space-y-2'}`}
           style={{
-            backgroundColor: isOver ? stage.color + '12' : '#f3f4f680',
+            backgroundColor: isOver ? stage.color + '20' : '#f3f4f680',
             border: isOver ? `2px dashed ${stage.color}` : '2px solid transparent',
+            boxShadow: isOver ? `inset 0 0 0 1px ${stage.color}40` : 'none',
           }}
         >
           <SortableContext items={leads.map((l) => l.id)} strategy={verticalListSortingStrategy}>

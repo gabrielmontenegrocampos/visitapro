@@ -32,33 +32,33 @@ export default function KanbanCard({ lead, compact = false, onClick, isDragging 
         ref={setNodeRef}
         style={{ transform: CSS.Transform.toString(transform), transition }}
         className={`bg-white rounded-lg border border-gray-200 select-none transition-all
-          ${dragging ? 'opacity-30 shadow-lg' : 'hover:shadow-sm hover:border-gray-300'}`}
+          ${dragging ? 'opacity-30 shadow-lg scale-105' : 'hover:shadow-sm hover:border-gray-300'}`}
       >
-        <div className="flex items-center gap-1.5 px-2 py-2">
-          {/* Drag handle */}
+        <div className="flex items-stretch">
+          {/* Drag handle — full height, wide enough for thumb */}
           <div
             {...attributes}
             {...listeners}
-            className="cursor-grab active:cursor-grabbing touch-none shrink-0"
+            className="flex items-center justify-center w-8 shrink-0 cursor-grab active:cursor-grabbing touch-none rounded-l-lg bg-gray-50 border-r border-gray-100"
             onClick={(e) => e.stopPropagation()}
           >
-            <GripVertical className="w-3.5 h-3.5 text-gray-300" />
+            <GripVertical className="w-4 h-4 text-gray-300" />
           </div>
 
           {/* Content */}
-          <div className="flex-1 min-w-0 cursor-pointer" onClick={onClick}>
-            <p className="text-sm font-medium text-gray-900 truncate leading-tight">{lead.name}</p>
-            {lead.phone && (
-              <p className="text-xs text-gray-400 truncate leading-tight">{lead.phone}</p>
+          <div className="flex-1 min-w-0 cursor-pointer flex items-center gap-2 px-2 py-2.5" onClick={onClick}>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate leading-tight">{lead.name}</p>
+              {lead.phone && (
+                <p className="text-xs text-gray-400 truncate leading-tight">{lead.phone}</p>
+              )}
+            </div>
+            {lead.profiles && (
+              <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shrink-0">
+                <span className="text-[9px] font-bold text-white">{getInitials(lead.profiles.full_name)}</span>
+              </div>
             )}
           </div>
-
-          {/* Avatar */}
-          {lead.profiles && (
-            <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shrink-0">
-              <span className="text-[9px] font-bold text-white">{getInitials(lead.profiles.full_name)}</span>
-            </div>
-          )}
         </div>
       </div>
     )
@@ -72,18 +72,18 @@ export default function KanbanCard({ lead, compact = false, onClick, isDragging 
         ${dragging ? 'opacity-30 rotate-1 shadow-xl' : 'hover:shadow-md hover:border-gray-300'}
         transition-all`}
     >
-      {/* Drag handle bar */}
+      {/* Drag handle bar — taller for easier touch */}
       <div
         {...attributes}
         {...listeners}
-        className="flex items-center justify-center h-5 cursor-grab active:cursor-grabbing touch-none rounded-t-xl"
+        className="flex items-center justify-center h-8 cursor-grab active:cursor-grabbing touch-none rounded-t-xl bg-gray-50 border-b border-gray-100"
         onClick={(e) => e.stopPropagation()}
       >
-        <GripVertical className="w-4 h-4 text-gray-300" />
+        <GripVertical className="w-4 h-4 text-gray-400" />
       </div>
 
       {/* Card content */}
-      <div className="px-3 pb-3 cursor-pointer" onClick={onClick}>
+      <div className="px-3 pb-3 pt-2 cursor-pointer" onClick={onClick}>
         <p className="font-semibold text-gray-900 text-sm leading-tight mb-2">{lead.name}</p>
 
         {lead.phone && (
