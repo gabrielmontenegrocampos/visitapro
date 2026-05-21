@@ -52,7 +52,8 @@ export default function SearchableSelect({
     }
     setOpen(true)
     setSearch('')
-    setTimeout(() => searchRef.current?.focus(), 30)
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    if (!isTouch) setTimeout(() => searchRef.current?.focus(), 30)
   }
 
   function close() { setOpen(false) }

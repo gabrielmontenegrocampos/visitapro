@@ -197,7 +197,6 @@ export default function VendedoresClient({ profiles: initial }: { profiles: Prof
                       placeholder="Nome do vendedor"
                       value={inviteForm.full_name}
                       onChange={(e) => setInviteForm((f) => ({ ...f, full_name: e.target.value }))}
-                      autoFocus
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">

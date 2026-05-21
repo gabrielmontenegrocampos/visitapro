@@ -52,7 +52,8 @@ export default function KanbanColumn({ stage, leads, allLeads, compact, onLeadCl
       width,
       zIndex: 9999,
     })
-    inputRef.current?.focus()
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    if (!isTouch) inputRef.current?.focus()
   }, [adding])
 
   async function handleSelect(lead: LeadWithRelations) {
