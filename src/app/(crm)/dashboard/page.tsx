@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export default async function DashboardPage() {
   const supabase = await createClient()
 
-  const [metricsRes, stagesRes, visitsRes] = await Promise.all([
+  const [metricsRes, stagesRes, visitsRes, leadsRes] = await Promise.all([
     supabase.from('dashboard_metrics').select('*').single(),
     supabase.from('pipeline_stages').select('id, name, color, slug').order('position'),
     supabase
@@ -23,18 +23,18 @@ export default async function DashboardPage() {
       .in('status', ['agendada', 'reagendada'])
       .order('scheduled_at')
       .limit(10),
+    supabase.from('leads').select('stage_id'),
   ])
 
   const stages = stagesRes.data ?? []
-  const stageCountsRes = await Promise.all(
-    stages.map(async (stage: { id: string; name: string; color: string; slug: string }) => {
-      const { count } = await supabase
-        .from('leads')
-        .select('id', { count: 'exact', head: true })
-        .eq('stage_id', stage.id)
-      return { ...stage, count: count ?? 0 }
-    })
-  )
+  const countByStage = (leadsRes.data ?? []).reduce<Record<string, number>>((acc, l) => {
+    if (l.stage_id) acc[l.stage_id] = (acc[l.stage_id] ?? 0) + 1
+    return acc
+  }, {})
+  const stageCountsRes = stages.map((stage: { id: string; name: string; color: string; slug: string }) => ({
+    ...stage,
+    count: countByStage[stage.id] ?? 0,
+  }))
 
   return (
     <div className="space-y-6">

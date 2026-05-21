@@ -23,16 +23,17 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // Use getSession() — reads JWT from cookie locally, no network round-trip
+  const { data: { session } } = await supabase.auth.getSession()
 
   const isAuthPage = request.nextUrl.pathname.startsWith('/login')
   const isPublic   = request.nextUrl.pathname === '/' || request.nextUrl.pathname.startsWith('/api/')
 
-  if (!user && !isAuthPage && !isPublic) {
+  if (!session && !isAuthPage && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (user && isAuthPage) {
+  if (session && isAuthPage) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 

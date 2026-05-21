@@ -5,9 +5,9 @@ export const dynamic = 'force-dynamic'
 
 export default async function AgendaPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
 
-  const [visitsRes, vendedoresRes, leadsRes] = await Promise.all([
+  const [{ data: { user } }, visitsRes, vendedoresRes, leadsRes] = await Promise.all([
+    supabase.auth.getUser(),
     supabase
       .from('visits')
       .select('*, leads(id, name, phone, address), profiles!visits_assigned_to_fkey(id, full_name)')
