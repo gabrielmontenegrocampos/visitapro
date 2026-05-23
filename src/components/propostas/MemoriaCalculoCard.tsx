@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Calculator, ChevronRight } from 'lucide-react'
+import { Calculator, ChevronRight, Trash2, Loader2, AlertTriangle, X } from 'lucide-react'
 import { formatCurrency, formatDate, PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_CONFIG } from '@/lib/utils'
 import InlineEditTitle from '@/components/propostas/InlineEditTitle'
+import { deleteProposal } from '@/app/(crm)/propostas/[id]/actions'
 
 interface Props {
   proposal: {
@@ -19,8 +21,17 @@ interface Props {
 }
 
 export default function MemoriaCalculoCard({ proposal: initial, calc }: Props) {
-  const [title, setTitle] = useState(initial.title)
+  const router = useRouter()
+  const [title, setTitle]           = useState(initial.title)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting]     = useState(false)
   const hasCalc = !!calc
+
+  async function handleDelete() {
+    setDeleting(true)
+    await deleteProposal(initial.id)
+    router.refresh()
+  }
 
   return (
     <div className="card p-4 flex items-center gap-4 hover:shadow-md transition-shadow">
@@ -63,14 +74,56 @@ export default function MemoriaCalculoCard({ proposal: initial, calc }: Props) {
         </div>
       </div>
 
-      {/* Valor + seta — clicável */}
-      <Link href={`/propostas/${initial.id}`} className="text-right shrink-0 flex items-center gap-2">
-        <div>
-          <p className="font-bold text-gray-900">{formatCurrency(initial.value)}</p>
-          <p className="text-xs text-gray-400">{formatDate(initial.created_at)}</p>
+      {/* Valor + seta + lixeira */}
+      <div className="shrink-0 flex items-center gap-1">
+        <Link href={`/propostas/${initial.id}`} className="text-right flex items-center gap-2">
+          <div>
+            <p className="font-bold text-gray-900">{formatCurrency(initial.value)}</p>
+            <p className="text-xs text-gray-400">{formatDate(initial.created_at)}</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-gray-300" />
+        </Link>
+        <button
+          onClick={() => setConfirmDelete(true)}
+          className="p-2 hover:bg-red-50 rounded-xl text-gray-300 hover:text-red-500 transition-colors"
+          title="Excluir"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Modal confirmação */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !deleting && setConfirmDelete(false)} />
+          <div className="relative bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-2xl z-10 p-6">
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <p className="font-bold text-gray-900 text-lg">Excluir proposta?</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  "<span className="font-medium">{title}</span>" e todos os seus itens serão removidos permanentemente.
+                </p>
+              </div>
+              <div className="flex gap-3 w-full mt-2">
+                <button onClick={() => setConfirmDelete(false)} disabled={deleting} className="btn-secondary flex-1">
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 px-4 rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  {deleting ? 'Excluindo...' : 'Excluir'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-        <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
-      </Link>
+      )}
     </div>
   )
 }

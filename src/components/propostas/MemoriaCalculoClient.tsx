@@ -4,13 +4,13 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Plus, Trash2, Pencil, X, Loader2, Save,
-  Hammer, Package, Wrench, Percent, CheckCircle2,
+  Hammer, Package, Wrench, Percent, CheckCircle2, AlertTriangle,
 } from 'lucide-react'
 import { formatCurrency, PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_CONFIG } from '@/lib/utils'
 import {
   createProposalItem, updateProposalItem, deleteProposalItem,
   createBdiItem, updateBdiItem, deleteBdiItem,
-  updateProposalStatus,
+  updateProposalStatus, deleteProposal,
   type Measurement,
 } from '@/app/(crm)/propostas/[id]/actions'
 import SearchableSelect from '@/components/ui/SearchableSelect'
@@ -135,8 +135,10 @@ export default function MemoriaCalculoClient({
   const [showBdiAdd,  setShowBdiAdd]  = useState(false)
   const [bdiSaving,   setBdiSaving]   = useState(false)
   const [deletingBdi, setDeletingBdi] = useState<string | null>(null)
-  const [bdiError,    setBdiError]    = useState<string | null>(null)
-  const [lastSaved,   setLastSaved]   = useState<string | null>(null)
+  const [bdiError,      setBdiError]      = useState<string | null>(null)
+  const [lastSaved,     setLastSaved]     = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting,      setDeleting]      = useState(false)
 
   // -- Computed --------------------------------------------------------------
   const serviceItems   = items.filter(i => !i.item_type || i.item_type === 'servico')
@@ -322,6 +324,13 @@ export default function MemoriaCalculoClient({
     setStatusSaving(false)
   }
 
+  async function handleDeleteProposal() {
+    setDeleting(true)
+    const res = await deleteProposal(proposal.id)
+    if (res.error) { setDeleting(false); setConfirmDelete(false); return }
+    router.push('/memoria-calculo')
+  }
+
   // -- Helpers de render -----------------------------------------------------
   function ItemCard({ item }: { item: ItemRow }) {
     const isService = !item.item_type || item.item_type === 'servico'
@@ -404,6 +413,13 @@ export default function MemoriaCalculoClient({
                 <CheckCircle2 className="w-3.5 h-3.5" /> Salvo {lastSaved}
               </span>
             )}
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="p-2 hover:bg-red-50 rounded-xl text-gray-400 hover:text-red-500 transition-colors"
+              title="Excluir proposta"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
             {statusSaving && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
             <div className="w-36">
               <SearchableSelect
@@ -594,6 +610,43 @@ export default function MemoriaCalculoClient({
           </button>
         </div>
       </div>
+
+      {/* ══ Modal confirmar exclusão ══ */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !deleting && setConfirmDelete(false)} />
+          <div className="relative bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-2xl z-10 p-6">
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <p className="font-bold text-gray-900 text-lg">Excluir proposta?</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  "<span className="font-medium">{proposal.title}</span>" e todos os seus itens serão removidos permanentemente.
+                </p>
+              </div>
+              <div className="flex gap-3 w-full mt-2">
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                  className="btn-secondary flex-1"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteProposal}
+                  disabled={deleting}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 px-4 rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  {deleting ? 'Excluindo...' : 'Excluir'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══ Modal de item ══ */}
       {modalType && (

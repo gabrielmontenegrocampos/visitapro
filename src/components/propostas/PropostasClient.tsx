@@ -2,11 +2,12 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Plus, Search, X, Loader2, CheckCircle, XCircle, Clock, FileText, ChevronRight } from 'lucide-react'
+import { Plus, Search, X, Loader2, CheckCircle, XCircle, Clock, FileText, ChevronRight, Trash2, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate, formatCurrency, PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_CONFIG } from '@/lib/utils'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import InlineEditTitle from '@/components/propostas/InlineEditTitle'
+import { deleteProposal } from '@/app/(crm)/propostas/[id]/actions'
 import type { Proposal } from '@/types/database'
 
 interface Lead { id: string; name: string }
@@ -30,6 +31,8 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
   const [statusFilter, setStatusFilter] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [form, setForm] = useState({
     lead_id: '', title: '', description: '', value: '',
     status: 'rascunho' as Proposal['status'], expires_at: '',
@@ -59,6 +62,14 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
       setShowForm(false)
     }
     setSaving(false)
+  }
+
+  async function handleDelete(id: string) {
+    setDeleting(true)
+    await deleteProposal(id)
+    setProposals(prev => prev.filter(p => p.id !== id))
+    setConfirmDeleteId(null)
+    setDeleting(false)
   }
 
   async function updateStatus(id: string, status: Proposal['status']) {
@@ -126,7 +137,7 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
         {filtered.map((p) => {
           const Icon = STATUS_ICONS[p.status] ?? FileText
           return (
-            <Link key={p.id} href={`/propostas/${p.id}`} className="card p-4 space-y-3 block hover:shadow-md transition-shadow">
+            <div key={p.id} className="card p-4 space-y-3 hover:shadow-md transition-shadow relative">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-gray-900 truncate">{p.leads?.name ?? '—'}</p>
@@ -143,7 +154,9 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                     <Icon className="w-3 h-3" />
                     {PROPOSAL_STATUS_LABELS[p.status]}
                   </span>
-                  <ChevronRight className="w-4 h-4 text-gray-300" />
+                  <button onClick={() => setConfirmDeleteId(p.id)} className="p-1 hover:bg-red-50 rounded-lg text-gray-300 hover:text-red-500 transition-colors">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
 
@@ -152,11 +165,11 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                 <p className="text-xs text-gray-400">{formatDate(p.created_at)}</p>
               </div>
 
-              <div className="pt-2 border-t border-gray-100 flex items-center gap-1.5 text-xs text-blue-600 font-medium">
+              <Link href={`/propostas/${p.id}`} className="pt-2 border-t border-gray-100 flex items-center gap-1.5 text-xs text-blue-600 font-medium">
                 <ChevronRight className="w-3.5 h-3.5" />
                 Abrir memória de cálculo
-              </div>
-            </Link>
+              </Link>
+            </div>
           )
         })}
         {filtered.length === 0 && (
@@ -206,13 +219,22 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatDate(p.created_at)}</td>
                     <td className="px-4 py-3">
-                      <Link
-                        href={`/propostas/${p.id}`}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
-                      >
-                        <ChevronRight className="w-3.5 h-3.5" />
-                        Abrir
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/propostas/${p.id}`}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                          Abrir
+                        </Link>
+                        <button
+                          onClick={() => setConfirmDeleteId(p.id)}
+                          className="p-1 hover:bg-red-50 rounded-lg text-gray-300 hover:text-red-500 transition-colors"
+                          title="Excluir"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <SearchableSelect
@@ -294,6 +316,42 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
           </div>
         </div>
       )}
+
+      {/* Modal confirmar exclusão */}
+      {confirmDeleteId && (() => {
+        const p = proposals.find(x => x.id === confirmDeleteId)
+        return (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !deleting && setConfirmDeleteId(null)} />
+            <div className="relative bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-2xl z-10 p-6">
+              <div className="flex flex-col items-center text-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                  <AlertTriangle className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900 text-lg">Excluir proposta?</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    "<span className="font-medium">{p?.title}</span>" e todos os seus itens serão removidos permanentemente.
+                  </p>
+                </div>
+                <div className="flex gap-3 w-full mt-2">
+                  <button onClick={() => setConfirmDeleteId(null)} disabled={deleting} className="btn-secondary flex-1">
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => handleDelete(confirmDeleteId)}
+                    disabled={deleting}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 px-4 rounded-xl transition-colors flex items-center justify-center gap-2"
+                  >
+                    {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    {deleting ? 'Excluindo...' : 'Excluir'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </>
   )
 }

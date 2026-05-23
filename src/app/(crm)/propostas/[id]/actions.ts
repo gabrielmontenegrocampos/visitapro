@@ -211,6 +211,19 @@ export async function deleteBdiItem(itemId: string, proposalId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Delete proposal
+// ---------------------------------------------------------------------------
+
+export async function deleteProposal(proposalId: string) {
+  const admin = adminClient()
+  const { error } = await admin.from('proposals').delete().eq('id', proposalId)
+  if (error) return { error: error.message }
+  revalidatePath('/propostas')
+  revalidatePath('/memoria-calculo')
+  return { error: null }
+}
+
+// ---------------------------------------------------------------------------
 // Proposal title
 // ---------------------------------------------------------------------------
 
