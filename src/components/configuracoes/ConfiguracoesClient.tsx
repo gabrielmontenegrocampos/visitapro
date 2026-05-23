@@ -1,13 +1,12 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import {
-  Building2, Phone, Mail, MapPin, Globe, Link2, AtSign,
+  Building2, Phone, Mail, MapPin, Globe, AtSign,
   Upload, Loader2, CheckCircle2, AlertCircle, X, Camera,
   Hash,
 } from 'lucide-react'
-import { saveCompanySettings, saveLogoUrl, ensureStorageBucket } from '@/app/(crm)/configuracoes/actions'
+import { saveCompanySettings, uploadLogo } from '@/app/(crm)/configuracoes/actions'
 import type { CompanySettings } from '@/types/database'
 
 // ── Máscaras ────────────────────────────────────────────────────────────────
@@ -125,20 +124,12 @@ export default function ConfiguracoesClient({ settings }: { settings: CompanySet
     setLogoUploading(true)
     setError(null)
     try {
-      await ensureStorageBucket()
-      const supabase = createClient()
-      const ext  = file.name.split('.').pop()
-      const path = `logo-${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage
-        .from('company-assets')
-        .upload(path, file, { upsert: true, contentType: file.type })
-      if (upErr) throw upErr
-      const { data: { publicUrl } } = supabase.storage
-        .from('company-assets')
-        .getPublicUrl(path)
-      setLogoPreview(publicUrl)
-      set('logo_url', publicUrl)
-      await saveLogoUrl(publicUrl)
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await uploadLogo(fd)
+      if (res.error) throw new Error(res.error)
+      setLogoPreview(res.url!)
+      set('logo_url', res.url!)
     } catch (e: any) {
       setError(`Erro ao enviar logo: ${e.message ?? e}`)
     }

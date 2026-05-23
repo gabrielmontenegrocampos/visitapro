@@ -51,33 +51,49 @@ export async function saveCompanySettings(
   return { error: null }
 }
 
-export async function ensureStorageBucket() {
+async function ensureStorageBucket() {
   const admin = adminClient()
   const { data: buckets } = await admin.storage.listBuckets()
   const exists = buckets?.some(b => b.name === 'company-assets')
   if (!exists) {
     await admin.storage.createBucket('company-assets', {
       public: true,
-      fileSizeLimit: 5 * 1024 * 1024, // 5MB
+      fileSizeLimit: 5 * 1024 * 1024,
       allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'],
     })
   }
-  return { error: null }
 }
 
-export async function saveLogoUrl(url: string) {
-  const admin = adminClient()
-  const { data: existing } = await admin
-    .from('company_settings')
-    .select('id')
-    .limit(1)
-    .maybeSingle()
+export async function uploadLogo(formData: FormData) {
+  const file = formData.get('file') as File | null
+  if (!file) return { error: 'Nenhum arquivo', url: null }
 
+  const admin = adminClient()
+  await ensureStorageBucket()
+
+  const ext  = file.name.split('.').pop() ?? 'png'
+  const path = `logo-${Date.now()}.${ext}`
+  const bytes = await file.arrayBuffer()
+
+  const { error: upErr } = await admin.storage
+    .from('company-assets')
+    .upload(path, bytes, { upsert: true, contentType: file.type })
+
+  if (upErr) return { error: upErr.message, url: null }
+
+  const { data: { publicUrl } } = admin.storage
+    .from('company-assets')
+    .getPublicUrl(path)
+
+  // Persiste URL na tabela
+  const { data: existing } = await admin
+    .from('company_settings').select('id').limit(1).maybeSingle()
   if (existing?.id) {
-    await admin.from('company_settings').update({ logo_url: url }).eq('id', existing.id)
+    await admin.from('company_settings').update({ logo_url: publicUrl }).eq('id', existing.id)
   } else {
-    await admin.from('company_settings').insert({ logo_url: url })
+    await admin.from('company_settings').insert({ logo_url: publicUrl })
   }
+
   revalidatePath('/configuracoes')
-  return { error: null }
+  return { error: null, url: publicUrl }
 }
