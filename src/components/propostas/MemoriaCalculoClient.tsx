@@ -110,6 +110,7 @@ export default function MemoriaCalculoClient({
   const [modalType, setModalType]     = useState<ModalType>(null)
   const [editingItem, setEditingItem] = useState<ItemRow | null>(null)
   const [itemSaving, setItemSaving]   = useState(false)
+  const [itemError,  setItemError]    = useState<string | null>(null)
   const [deletingId, setDeletingId]   = useState<string | null>(null)
 
   // Form serviço
@@ -165,12 +166,12 @@ export default function MemoriaCalculoClient({
   // -- Abrir modais ----------------------------------------------------------
   function openAddService() {
     setEditingItem(null); setSvcArea(''); setSvcType(''); setSvcUnit('m²')
-    setSvcMoCost(''); setSvcNotes(''); setMeas([newMeas()]); setModalType('servico')
+    setSvcMoCost(''); setSvcNotes(''); setMeas([newMeas()]); setItemError(null); setModalType('servico')
   }
   function openAddSimple(type: 'material' | 'equipamento') {
     setEditingItem(null); setSimName(''); setSimQty('')
     setSimUnit(type === 'material' ? 'un' : 'dia')
-    setSimPrice(''); setSimNotes(''); setModalType(type)
+    setSimPrice(''); setSimNotes(''); setItemError(null); setModalType(type)
   }
   function openEdit(item: ItemRow) {
     setEditingItem(item)
@@ -194,6 +195,7 @@ export default function MemoriaCalculoClient({
   // -- Salvar item -----------------------------------------------------------
   async function handleSaveItem() {
     setItemSaving(true)
+    setItemError(null)
     const isService = modalType === 'servico'
 
     if (isService) {
@@ -211,18 +213,21 @@ export default function MemoriaCalculoClient({
       const unitPrice  = payload.labor_cost
       const totalPrice = payload.quantity * unitPrice
       if (editingItem) {
+        const snap = items
         const opt: ItemRow = { ...editingItem, ...payload, unit_price: unitPrice, total_price: totalPrice }
         setItems(prev => prev.map(i => i.id === editingItem.id ? opt : i))
-        setModalType(null); setItemSaving(false)
-        await updateProposalItem(editingItem.id, proposal.id, payload)
+        setItemSaving(false)
+        const res = await updateProposalItem(editingItem.id, proposal.id, payload)
+        if (res.error) { setItems(snap); setItemError(`Erro: ${res.error}`) }
+        else { setModalType(null); markSaved() }
       } else {
         const tempId = `t${Date.now()}`
         const opt: ItemRow = { id: tempId, proposal_id: proposal.id, ...payload, unit_price: unitPrice, total_price: totalPrice, service_type: svcType.trim(), created_at: '' }
         setItems(prev => [...prev, opt])
-        setModalType(null); setItemSaving(false)
-        const { data } = await createProposalItem(proposal.id, payload)
-        if (data) setItems(prev => prev.map(i => i.id === tempId ? (data as ItemRow) : i))
-        markSaved()
+        setItemSaving(false)
+        const res = await createProposalItem(proposal.id, payload)
+        if (res.error) { setItems(prev => prev.filter(i => i.id !== tempId)); setItemError(`Erro: ${res.error}`) }
+        else { if (res.data) setItems(prev => prev.map(i => i.id === tempId ? (res.data as ItemRow) : i)); setModalType(null); markSaved() }
       }
     } else {
       if (!simName.trim() || !simQty || !simPrice) { setItemSaving(false); return }
@@ -234,19 +239,21 @@ export default function MemoriaCalculoClient({
       }
       const totalPrice = payload.quantity * payload.unit_price
       if (editingItem) {
+        const snap = items
         const opt: ItemRow = { ...editingItem, ...payload, labor_cost: 0, service_type: null, measurements: [], unit_price: payload.unit_price, total_price: totalPrice }
         setItems(prev => prev.map(i => i.id === editingItem.id ? opt : i))
-        setModalType(null); setItemSaving(false)
-        await updateProposalItem(editingItem.id, proposal.id, payload)
-        markSaved()
+        setItemSaving(false)
+        const res = await updateProposalItem(editingItem.id, proposal.id, payload)
+        if (res.error) { setItems(snap); setItemError(`Erro: ${res.error}`) }
+        else { setModalType(null); markSaved() }
       } else {
         const tempId = `t${Date.now()}`
         const opt: ItemRow = { id: tempId, proposal_id: proposal.id, ...payload, labor_cost: 0, service_type: null, measurements: [], unit_price: payload.unit_price, total_price: totalPrice, created_at: '' }
         setItems(prev => [...prev, opt])
-        setModalType(null); setItemSaving(false)
-        const { data } = await createProposalItem(proposal.id, payload)
-        if (data) setItems(prev => prev.map(i => i.id === tempId ? (data as ItemRow) : i))
-        markSaved()
+        setItemSaving(false)
+        const res = await createProposalItem(proposal.id, payload)
+        if (res.error) { setItems(prev => prev.filter(i => i.id !== tempId)); setItemError(`Erro: ${res.error}`) }
+        else { if (res.data) setItems(prev => prev.map(i => i.id === tempId ? (res.data as ItemRow) : i)); setModalType(null); markSaved() }
       }
     }
   }
@@ -762,6 +769,14 @@ export default function MemoriaCalculoClient({
                 </>
               )}
             </div>
+
+            {/* Erro */}
+            {itemError && (
+              <div className="mx-5 mb-1 px-3 py-2 bg-red-50 border border-red-200 rounded-xl flex items-start justify-between gap-2 shrink-0">
+                <p className="text-xs text-red-700 font-medium">{itemError}</p>
+                <button onClick={() => setItemError(null)}><X className="w-3.5 h-3.5 text-red-400 shrink-0" /></button>
+              </div>
+            )}
 
             {/* Rodapé */}
             <div className="flex gap-3 px-5 py-4 border-t border-gray-100 shrink-0">
