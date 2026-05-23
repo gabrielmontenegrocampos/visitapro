@@ -49,10 +49,23 @@ export const SOURCE_LABELS: Record<string, string> = {
 
 export const PROPOSAL_STATUS_LABELS: Record<string, string> = {
   rascunho: 'Rascunho',
-  enviada: 'Enviada',
-  aceita: 'Aceita',
+  enviada:  'Enviada',
+  aceita:   'Aceita',
   recusada: 'Recusada',
   expirada: 'Expirada',
+}
+
+// Cores alinhadas com o pipeline (mesmos hex das pipeline_stages)
+export const PROPOSAL_STATUS_CONFIG: Record<string, {
+  badge: string   // classes Tailwind para o badge
+  hex: string     // cor do pipeline correspondente
+  pipelineSlug: string | null  // slug da stage que o lead deve ir
+}> = {
+  rascunho: { badge: 'bg-gray-100 text-gray-700',        hex: '#6b7280', pipelineSlug: null              },
+  enviada:  { badge: 'bg-cyan-100 text-cyan-700',        hex: '#06b6d4', pipelineSlug: 'proposta_enviada' },
+  aceita:   { badge: 'bg-emerald-100 text-emerald-700',  hex: '#10b981', pipelineSlug: 'fechado_ganho'    },
+  recusada: { badge: 'bg-red-100 text-red-700',          hex: '#ef4444', pipelineSlug: 'fechado_perdido'  },
+  expirada: { badge: 'bg-amber-100 text-amber-700',      hex: '#f59e0b', pipelineSlug: 'fechado_perdido'  },
 }
 
 export function whatsappUrl(phone: string | null | undefined) {

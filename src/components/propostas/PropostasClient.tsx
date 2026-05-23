@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Plus, Search, X, Loader2, CheckCircle, XCircle, Clock, FileText, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { formatDate, formatCurrency, PROPOSAL_STATUS_LABELS } from '@/lib/utils'
+import { formatDate, formatCurrency, PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_CONFIG } from '@/lib/utils'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import InlineEditTitle from '@/components/propostas/InlineEditTitle'
 import type { Proposal } from '@/types/database'
@@ -13,14 +13,6 @@ interface Lead { id: string; name: string }
 interface ProposalWithRelations extends Proposal {
   leads: { id: string; name: string; phone: string | null } | null
   profiles: { id: string; full_name: string } | null
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  rascunho: 'bg-gray-100 text-gray-700',
-  enviada:  'bg-blue-100 text-blue-700',
-  aceita:   'bg-green-100 text-green-700',
-  recusada: 'bg-red-100 text-red-700',
-  expirada: 'bg-yellow-100 text-yellow-700',
 }
 
 const STATUS_ICONS: Record<string, typeof CheckCircle> = {
@@ -147,7 +139,7 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                   />
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[p.status]}`}>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${PROPOSAL_STATUS_CONFIG[p.status]?.badge ?? 'bg-gray-100 text-gray-700'}`}>
                     <Icon className="w-3 h-3" />
                     {PROPOSAL_STATUS_LABELS[p.status]}
                   </span>
@@ -207,7 +199,7 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                     </td>
                     <td className="px-4 py-3 font-semibold text-gray-900">{formatCurrency(p.value)}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[p.status]}`}>
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${PROPOSAL_STATUS_CONFIG[p.status]?.badge ?? 'bg-gray-100 text-gray-700'}`}>
                         <Icon className="w-3 h-3" />
                         {PROPOSAL_STATUS_LABELS[p.status]}
                       </span>
@@ -226,7 +218,9 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                       <SearchableSelect
                         value={p.status}
                         onChange={(v) => updateStatus(p.id, v as Proposal['status'])}
-                        options={Object.entries(PROPOSAL_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                        options={Object.entries(PROPOSAL_STATUS_LABELS).map(([k, v]) => ({
+                          value: k, label: v, dot: PROPOSAL_STATUS_CONFIG[k]?.hex,
+                        }))}
                       />
                     </td>
                   </tr>

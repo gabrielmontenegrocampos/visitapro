@@ -230,13 +230,65 @@ export async function updateProposalTitle(proposalId: string, title: string) {
 
 export async function updateProposalStatus(proposalId: string, status: string) {
   const admin = adminClient()
+
+  // Atualiza status da proposta
   const { error } = await admin
     .from('proposals')
     .update({ status, sent_at: status === 'enviada' ? new Date().toISOString() : undefined })
     .eq('id', proposalId)
-
   if (error) return { error: error.message }
+
+  // Busca lead_id e título da proposta
+  const { data: proposal } = await admin
+    .from('proposals')
+    .select('lead_id, title')
+    .eq('id', proposalId)
+    .single()
+
+  if (proposal?.lead_id) {
+    // Mapeamento status → slug do pipeline
+    const slugMap: Record<string, string | null> = {
+      rascunho: null,
+      enviada:  'proposta_enviada',
+      aceita:   'fechado_ganho',
+      recusada: 'fechado_perdido',
+      expirada: 'fechado_perdido',
+    }
+    const targetSlug = slugMap[status] ?? null
+
+    // Move o lead para a stage correspondente
+    if (targetSlug) {
+      const { data: stage } = await admin
+        .from('pipeline_stages')
+        .select('id, name')
+        .eq('slug', targetSlug)
+        .single()
+
+      if (stage) {
+        await admin.from('leads').update({ stage_id: stage.id }).eq('id', proposal.lead_id)
+      }
+    }
+
+    // Labels amigáveis para o histórico
+    const statusLabels: Record<string, string> = {
+      rascunho: 'Rascunho',
+      enviada:  'Enviada',
+      aceita:   'Aceita',
+      recusada: 'Recusada',
+      expirada: 'Expirada',
+    }
+
+    // Registra atividade no histórico do lead
+    await admin.from('activities').insert({
+      lead_id: proposal.lead_id,
+      type:    'proposta',
+      content: `Status da proposta "${proposal.title}" alterado para ${statusLabels[status] ?? status}`,
+    })
+  }
+
   revalidatePath(`/propostas/${proposalId}`)
   revalidatePath('/propostas')
+  revalidatePath('/pipeline')
+  revalidatePath('/leads')
   return { error: null }
 }

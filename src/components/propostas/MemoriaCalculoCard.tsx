@@ -3,16 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Calculator, ChevronRight } from 'lucide-react'
-import { formatCurrency, formatDate, PROPOSAL_STATUS_LABELS } from '@/lib/utils'
+import { formatCurrency, formatDate, PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_CONFIG } from '@/lib/utils'
 import InlineEditTitle from '@/components/propostas/InlineEditTitle'
-
-const STATUS_COLORS: Record<string, string> = {
-  rascunho: 'bg-gray-100 text-gray-700',
-  enviada:  'bg-blue-100 text-blue-700',
-  aceita:   'bg-green-100 text-green-700',
-  recusada: 'bg-red-100 text-red-700',
-  expirada: 'bg-yellow-100 text-yellow-700',
-}
 
 interface Props {
   proposal: {
@@ -43,7 +35,7 @@ export default function MemoriaCalculoCard({ proposal: initial, calc }: Props) {
           <p className="font-semibold text-gray-900 truncate">
             {(initial.leads as any)?.name ?? '—'}
           </p>
-          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${STATUS_COLORS[initial.status]}`}>
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${PROPOSAL_STATUS_CONFIG[initial.status]?.badge ?? 'bg-gray-100 text-gray-700'}`}>
             {PROPOSAL_STATUS_LABELS[initial.status]}
           </span>
         </div>

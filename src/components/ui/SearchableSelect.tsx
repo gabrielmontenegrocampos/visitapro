@@ -8,6 +8,7 @@ export interface SelectOption {
   value: string
   label: string
   subtitle?: string
+  dot?: string   // hex color for a status dot
 }
 
 interface SearchableSelectProps {
@@ -105,8 +106,11 @@ export default function SearchableSelect({
           onClick={() => open ? close() : openDropdown()}
           className={cn('input flex items-center justify-between gap-2 text-left w-full', className)}
         >
-          <span className={cn('flex-1 min-w-0 truncate', !selected && 'text-gray-400')}>
-            {selected?.label ?? placeholder}
+          <span className={cn('flex-1 min-w-0 flex items-center gap-2 truncate', !selected && 'text-gray-400')}>
+            {selected?.dot && (
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: selected.dot }} />
+            )}
+            <span className="truncate">{selected?.label ?? placeholder}</span>
           </span>
           <ChevronDown className={cn('w-4 h-4 text-gray-400 shrink-0 transition-transform duration-150', open && 'rotate-180')} />
         </button>
@@ -148,9 +152,14 @@ export default function SearchableSelect({
                     onClick={() => select(opt.value)}
                   >
                     <div className="flex-1 min-w-0">
-                      <p className={cn('truncate font-medium leading-tight', opt.value === value ? 'text-blue-700' : 'text-gray-800')}>
-                        {opt.label}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        {opt.dot && (
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: opt.dot }} />
+                        )}
+                        <p className={cn('truncate font-medium leading-tight', opt.value === value ? 'text-blue-700' : 'text-gray-800')}>
+                          {opt.label}
+                        </p>
+                      </div>
                       {opt.subtitle && (
                         <p className="truncate text-xs text-gray-400 mt-0.5 leading-tight">{opt.subtitle}</p>
                       )}

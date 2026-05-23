@@ -6,7 +6,7 @@ import {
   ArrowLeft, Plus, Trash2, Pencil, X, Loader2, Save,
   Hammer, Package, Wrench, Percent, CheckCircle2,
 } from 'lucide-react'
-import { formatCurrency, PROPOSAL_STATUS_LABELS } from '@/lib/utils'
+import { formatCurrency, PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_CONFIG } from '@/lib/utils'
 import {
   createProposalItem, updateProposalItem, deleteProposalItem,
   createBdiItem, updateBdiItem, deleteBdiItem,
@@ -409,7 +409,11 @@ export default function MemoriaCalculoClient({
               <SearchableSelect
                 value={proposal.status}
                 onChange={handleStatusChange}
-                options={Object.entries(PROPOSAL_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                options={Object.entries(PROPOSAL_STATUS_LABELS).map(([k, v]) => ({
+                  value: k,
+                  label: v,
+                  dot: PROPOSAL_STATUS_CONFIG[k]?.hex,
+                }))}
               />
             </div>
           </div>
