@@ -15,8 +15,8 @@ const navItems = [
   { href: '/pipeline',   label: 'Pipeline',           icon: KanbanSquare,    exact: false },
   { href: '/agenda',     label: 'Agenda',             icon: Calendar,        exact: false },
   { href: '/leads',      label: 'Leads',              icon: Users,           exact: false },
-  { href: '/propostas',  label: 'Propostas',          icon: FileText,        exact: true  },
-  { href: '/propostas',  label: 'Memória de Cálculo', icon: Calculator,      exact: false, activePrefix: '/propostas/' },
+  { href: '/propostas',        label: 'Propostas',          icon: FileText,   exact: false },
+  { href: '/memoria-calculo',  label: 'Memória de Cálculo', icon: Calculator, exact: false },
   { href: '/vendedores', label: 'Vendedores',         icon: UserCircle,      exact: false },
 ]
 
@@ -102,12 +102,10 @@ export default function Sidebar() {
 
         {/* Nav items */}
         <nav className="flex-1 py-3 overflow-hidden">
-          {navItems.map(({ href, label, icon: Icon, exact, activePrefix }, idx) => {
-            const active = activePrefix
-              ? pathname.startsWith(activePrefix)
-              : exact
-                ? pathname === href
-                : pathname === href || pathname.startsWith(href + '/')
+          {navItems.map(({ href, label, icon: Icon, exact }, idx) => {
+            const active = exact
+              ? pathname === href
+              : pathname === href || pathname.startsWith(href + '/')
             return (
               <Link
                 key={`${href}-${idx}`}
