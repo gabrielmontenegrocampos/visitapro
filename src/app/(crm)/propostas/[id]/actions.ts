@@ -211,6 +211,104 @@ export async function deleteBdiItem(itemId: string, proposalId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Generate public proposal
+// ---------------------------------------------------------------------------
+
+export async function generateProposal(
+  proposalId: string,
+  data: { payment_terms: string; client_notes: string; expires_at: string | null }
+) {
+  const admin = adminClient()
+
+  // Busca proposta atual
+  const { data: current } = await admin
+    .from('proposals')
+    .select('proposal_number, public_token, created_at')
+    .eq('id', proposalId)
+    .single()
+  if (!current) return { error: 'Proposta não encontrada', url: null }
+
+  // Gera número sequencial se ainda não tem
+  let proposalNumber = current.proposal_number
+  if (!proposalNumber) {
+    const year = new Date(current.created_at).getFullYear()
+    const { count } = await admin
+      .from('proposals')
+      .select('*', { count: 'exact', head: true })
+      .not('proposal_number', 'is', null)
+    const seq = String((count ?? 0) + 1).padStart(3, '0')
+    proposalNumber = `PROP-${year}-${seq}`
+  }
+
+  // Garante public_token
+  const token = current.public_token ?? crypto.randomUUID()
+
+  const { error } = await admin.from('proposals').update({
+    proposal_number: proposalNumber,
+    public_token:    token,
+    payment_terms:   data.payment_terms || null,
+    client_notes:    data.client_notes  || null,
+    expires_at:      data.expires_at    || null,
+    status:          'enviada',
+    sent_at:         new Date().toISOString(),
+  }).eq('id', proposalId)
+
+  if (error) return { error: error.message, url: null }
+
+  revalidatePath(`/propostas/${proposalId}`)
+  revalidatePath('/propostas')
+
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://visitapro.vercel.app'
+  return { error: null, url: `${baseUrl}/p/${token}`, proposalNumber }
+}
+
+// ---------------------------------------------------------------------------
+// Save all variable proposal details (commercial tab)
+// ---------------------------------------------------------------------------
+
+export type ClientRef = { id: string; name: string; company: string; phone: string }
+
+export async function saveProposalDetails(
+  proposalId: string,
+  data: {
+    payment_terms: string
+    client_notes: string
+    expires_at: string | null
+    client_refs: ClientRef[]
+    laudo: string
+    memorial_descritivo: string
+  }
+) {
+  const admin = adminClient()
+  const { error } = await admin.from('proposals').update({
+    payment_terms:      data.payment_terms      || null,
+    client_notes:       data.client_notes       || null,
+    expires_at:         data.expires_at         || null,
+    client_refs:        data.client_refs.length ? data.client_refs : null,
+    laudo:              data.laudo              || null,
+    memorial_descritivo: data.memorial_descritivo || null,
+  }).eq('id', proposalId)
+  if (error) return { error: error.message }
+  revalidatePath(`/propostas/${proposalId}`)
+  return { error: null }
+}
+
+export async function updateProposalCommercial(
+  proposalId: string,
+  data: { payment_terms: string; client_notes: string; expires_at: string | null }
+) {
+  const admin = adminClient()
+  const { error } = await admin.from('proposals').update({
+    payment_terms: data.payment_terms || null,
+    client_notes:  data.client_notes  || null,
+    expires_at:    data.expires_at    || null,
+  }).eq('id', proposalId)
+  if (error) return { error: error.message }
+  revalidatePath(`/propostas/${proposalId}`)
+  return { error: null }
+}
+
+// ---------------------------------------------------------------------------
 // Delete proposal
 // ---------------------------------------------------------------------------
 
@@ -219,7 +317,6 @@ export async function deleteProposal(proposalId: string) {
   const { error } = await admin.from('proposals').delete().eq('id', proposalId)
   if (error) return { error: error.message }
   revalidatePath('/propostas')
-  revalidatePath('/memoria-calculo')
   return { error: null }
 }
 
@@ -233,7 +330,6 @@ export async function updateProposalTitle(proposalId: string, title: string) {
   if (error) return { error: error.message }
   revalidatePath(`/propostas/${proposalId}`)
   revalidatePath('/propostas')
-  revalidatePath('/memoria-calculo')
   return { error: null }
 }
 

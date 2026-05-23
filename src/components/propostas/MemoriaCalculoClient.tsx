@@ -5,13 +5,16 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Plus, Trash2, Pencil, X, Loader2, Save,
   Hammer, Package, Wrench, Percent, CheckCircle2, AlertTriangle,
+  FileText, Copy, ExternalLink, Users, BookOpen, ClipboardList,
+  CreditCard, Calendar,
 } from 'lucide-react'
 import { formatCurrency, PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_CONFIG } from '@/lib/utils'
 import {
   createProposalItem, updateProposalItem, deleteProposalItem,
   createBdiItem, updateBdiItem, deleteBdiItem,
-  updateProposalStatus, deleteProposal,
-  type Measurement,
+  updateProposalStatus, deleteProposal, generateProposal,
+  saveProposalDetails,
+  type Measurement, type ClientRef,
 } from '@/app/(crm)/propostas/[id]/actions'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import InlineEditTitle from '@/components/propostas/InlineEditTitle'
@@ -50,6 +53,12 @@ interface ProposalRow {
   status: string
   value: number
   leads: { id: string; name: string } | null
+  payment_terms: string | null
+  client_notes: string | null
+  expires_at: string | null
+  client_refs: ClientRef[] | null
+  laudo: string | null
+  memorial_descritivo: string | null
 }
 
 type MeasForm = { id: string; label: string; height: string; width: string }
@@ -93,10 +102,12 @@ export default function MemoriaCalculoClient({
   proposal: initial,
   items: initialItems,
   bdiItems: initialBdi,
+  settingsRefs = [],
 }: {
   proposal: ProposalRow
   items: ItemRow[]
   bdiItems: BdiItemRow[]
+  settingsRefs?: ClientRef[]
 }) {
   const router = useRouter()
 
@@ -139,6 +150,28 @@ export default function MemoriaCalculoClient({
   const [lastSaved,     setLastSaved]     = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting,      setDeleting]      = useState(false)
+
+  // Modal gerar proposta comercial
+  const [showGenModal,     setShowGenModal]     = useState(false)
+  const [genPaymentTerms,  setGenPaymentTerms]  = useState('')
+  const [genClientNotes,   setGenClientNotes]   = useState('')
+  const [genExpiresAt,     setGenExpiresAt]     = useState('')
+  const [genSaving,        setGenSaving]        = useState(false)
+  const [genError,         setGenError]         = useState<string | null>(null)
+  const [genResult,        setGenResult]        = useState<{ url: string; proposalNumber: string } | null>(null)
+  const [copied,           setCopied]           = useState(false)
+
+  // Dados comerciais da proposta (variáveis)
+  const [detPayment,  setDetPayment]  = useState(initial.payment_terms ?? '')
+  const [detNotes,    setDetNotes]    = useState(initial.client_notes ?? '')
+  const [detExpires,  setDetExpires]  = useState(initial.expires_at?.split('T')[0] ?? '')
+  // Se a proposta ainda não tem refs customizadas, herda todas as globais das configurações
+  const [detRefs,     setDetRefs]     = useState<ClientRef[]>(initial.client_refs ?? settingsRefs)
+  const [detLaudo,    setDetLaudo]    = useState(initial.laudo ?? '')
+  const [detMemorial, setDetMemorial] = useState(initial.memorial_descritivo ?? '')
+  const [detSaving,   setDetSaving]   = useState(false)
+  const [detSaved,    setDetSaved]    = useState(false)
+  const [detError,    setDetError]    = useState<string | null>(null)
 
   // -- Computed --------------------------------------------------------------
   const serviceItems   = items.filter(i => !i.item_type || i.item_type === 'servico')
@@ -328,7 +361,62 @@ export default function MemoriaCalculoClient({
     setDeleting(true)
     const res = await deleteProposal(proposal.id)
     if (res.error) { setDeleting(false); setConfirmDelete(false); return }
-    router.push('/memoria-calculo')
+    router.push('/propostas')
+  }
+
+  async function handleSaveDetails() {
+    setDetSaving(true); setDetError(null); setDetSaved(false)
+    const res = await saveProposalDetails(proposal.id, {
+      payment_terms:      detPayment,
+      client_notes:       detNotes,
+      expires_at:         detExpires || null,
+      client_refs:        detRefs,
+      laudo:              detLaudo,
+      memorial_descritivo: detMemorial,
+    })
+    setDetSaving(false)
+    if (res.error) setDetError(res.error)
+    else { setDetSaved(true); markSaved() }
+  }
+
+  function addRef() {
+    setDetRefs(prev => [...prev, { id: `r${Date.now()}`, name: '', company: '', phone: '' }])
+    setDetSaved(false)
+  }
+  function updateRef(id: string, field: keyof ClientRef, value: string) {
+    setDetRefs(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
+    setDetSaved(false)
+  }
+  function removeRef(id: string) {
+    setDetRefs(prev => prev.filter(r => r.id !== id))
+    setDetSaved(false)
+  }
+
+  function openGenModal() {
+    setGenError(null); setGenResult(null); setCopied(false)
+    // Pré-preenche com dados já salvos
+    setGenPaymentTerms(detPayment); setGenClientNotes(detNotes); setGenExpiresAt(detExpires)
+    setShowGenModal(true)
+  }
+
+  async function handleGenerateProposal() {
+    setGenSaving(true); setGenError(null)
+    const res = await generateProposal(proposal.id, {
+      payment_terms: genPaymentTerms,
+      client_notes:  genClientNotes,
+      expires_at:    genExpiresAt || null,
+    })
+    if (res.error) { setGenError(res.error); setGenSaving(false); return }
+    setGenResult({ url: res.url!, proposalNumber: res.proposalNumber! })
+    setProposal(p => ({ ...p, status: 'enviada' }))
+    setGenSaving(false)
+  }
+
+  async function handleCopyUrl() {
+    if (!genResult) return
+    await navigator.clipboard.writeText(genResult.url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   // -- Helpers de render -----------------------------------------------------
@@ -593,21 +681,192 @@ export default function MemoriaCalculoClient({
           </div>
         </div>
 
-        {/* ── Botão Concluir ── */}
-        <div className="flex items-center justify-between gap-3 pt-2 pb-4">
-          {lastSaved ? (
-            <span className="flex items-center gap-1.5 text-sm text-green-600 font-medium">
-              <CheckCircle2 className="w-4 h-4" /> Salvo às {lastSaved}
-            </span>
-          ) : (
-            <span className="text-xs text-gray-400">Itens salvos automaticamente</span>
-          )}
+        {/* ── Dados Comerciais da Proposta ── */}
+        <div className="card overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50">
+            <FileText className="w-4 h-4 text-blue-600" />
+            <h3 className="font-semibold text-gray-800 text-sm">Dados Comerciais da Proposta</h3>
+            <span className="ml-auto text-[10px] text-gray-400 font-medium">Aparecem nas páginas da proposta</span>
+          </div>
+
+          <div className="p-4 space-y-4">
+
+            {/* Condições de Pagamento */}
+            <div>
+              <label className="label flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5 text-gray-400" /> Forma de Pagamento</label>
+              <textarea
+                className="input resize-none text-sm"
+                rows={3}
+                placeholder={"Entrada: R$ X\n2 parcelas quinzenais: R$ X\nEntrega da obra: R$ X"}
+                value={detPayment}
+                onChange={e => { setDetPayment(e.target.value); setDetSaved(false) }}
+              />
+            </div>
+
+            {/* Observações */}
+            <div>
+              <label className="label flex items-center gap-1.5"><ClipboardList className="w-3.5 h-3.5 text-gray-400" /> Observações ao Cliente</label>
+              <textarea
+                className="input resize-none text-sm"
+                rows={3}
+                placeholder={"Estão inclusos no valor:\n• ART de obra\n• Materiais necessários\n• Todos os impostos"}
+                value={detNotes}
+                onChange={e => { setDetNotes(e.target.value); setDetSaved(false) }}
+              />
+            </div>
+
+            {/* Validade */}
+            <div>
+              <label className="label flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-gray-400" /> Validade da Proposta</label>
+              <input type="date" className="input text-sm" value={detExpires}
+                onChange={e => { setDetExpires(e.target.value); setDetSaved(false) }} />
+            </div>
+
+            {/* Referências Comerciais — CRUD completo */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="label flex items-center gap-1.5 mb-0">
+                  <Users className="w-3.5 h-3.5 text-gray-400" /> Referências Comerciais
+                </label>
+                <div className="flex items-center gap-2">
+                  {settingsRefs.length > 0 && (
+                    <button
+                      onClick={() => { setDetRefs(settingsRefs); setDetSaved(false) }}
+                      className="text-[11px] text-gray-400 hover:text-blue-600 font-medium transition-colors"
+                      title="Restaurar lista original das Configurações"
+                    >
+                      Restaurar padrão
+                    </button>
+                  )}
+                  <button
+                    onClick={addRef}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-semibold bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors"
+                  >
+                    <Plus className="w-3 h-3" /> Adicionar
+                  </button>
+                </div>
+              </div>
+
+              {detRefs.length > 0 ? (
+                <div className="rounded-xl border border-gray-200 overflow-hidden">
+                  {/* Header */}
+                  <div className="grid grid-cols-[1fr_1fr_1fr_34px] bg-gray-800 text-white text-[10px] font-bold uppercase tracking-wider">
+                    <div className="px-3 py-2 border-r border-gray-700">Nome</div>
+                    <div className="px-3 py-2 border-r border-gray-700">Empresa</div>
+                    <div className="px-3 py-2 border-r border-gray-700">Contato</div>
+                    <div />
+                  </div>
+                  {detRefs.map((ref, idx) => (
+                    <div
+                      key={ref.id}
+                      className={`grid grid-cols-[1fr_1fr_1fr_34px] items-stretch border-t border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                    >
+                      <input
+                        className="px-3 py-2 text-xs text-gray-800 bg-transparent outline-none border-r border-gray-100 focus:bg-blue-50 focus:border-blue-200 transition-colors min-w-0"
+                        placeholder="Nome"
+                        value={ref.name}
+                        onChange={e => updateRef(ref.id, 'name', e.target.value)}
+                      />
+                      <input
+                        className="px-3 py-2 text-xs text-gray-600 bg-transparent outline-none border-r border-gray-100 focus:bg-blue-50 focus:border-blue-200 transition-colors min-w-0"
+                        placeholder="Empresa"
+                        value={ref.company}
+                        onChange={e => updateRef(ref.id, 'company', e.target.value)}
+                      />
+                      <input
+                        className="px-3 py-2 text-xs text-gray-600 bg-transparent outline-none border-r border-gray-100 focus:bg-blue-50 focus:border-blue-200 transition-colors min-w-0"
+                        placeholder="(11) 99999-9999"
+                        value={ref.phone}
+                        onChange={e => updateRef(ref.id, 'phone', e.target.value)}
+                      />
+                      <button
+                        onClick={() => removeRef(ref.id)}
+                        className="flex items-center justify-center hover:bg-red-50 transition-colors"
+                        title="Remover"
+                      >
+                        <X className="w-3.5 h-3.5 text-red-400" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-gray-200 py-4 px-3 flex items-center justify-between gap-3">
+                  <p className="text-xs text-gray-400">Nenhuma referência nesta proposta.</p>
+                  {settingsRefs.length > 0 && (
+                    <button
+                      onClick={() => { setDetRefs(settingsRefs); setDetSaved(false) }}
+                      className="text-xs text-blue-500 hover:text-blue-700 font-medium shrink-0"
+                    >
+                      Carregar do cadastro
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Laudo */}
+            <div>
+              <label className="label flex items-center gap-1.5"><BookOpen className="w-3.5 h-3.5 text-gray-400" /> Laudo Técnico <span className="text-gray-400 font-normal">(opcional)</span></label>
+              <textarea
+                className="input resize-none text-sm"
+                rows={4}
+                placeholder="Descreva o laudo técnico da obra, condições encontradas, diagnóstico..."
+                value={detLaudo}
+                onChange={e => { setDetLaudo(e.target.value); setDetSaved(false) }}
+              />
+            </div>
+
+            {/* Memorial Descritivo */}
+            <div>
+              <label className="label flex items-center gap-1.5"><ClipboardList className="w-3.5 h-3.5 text-gray-400" /> Memorial Descritivo de Materiais <span className="text-gray-400 font-normal">(opcional)</span></label>
+              <textarea
+                className="input resize-none text-sm"
+                rows={4}
+                placeholder={"Tinta: Coral Sol e Chuva 18L\nTextura: Textura Acrílica 25kg\nPrimer: Selador Acrílico 18L\n..."}
+                value={detMemorial}
+                onChange={e => { setDetMemorial(e.target.value); setDetSaved(false) }}
+              />
+            </div>
+
+            {detError && <p className="text-xs text-red-500">{detError}</p>}
+
+            <button
+              onClick={handleSaveDetails}
+              disabled={detSaving}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all ${detSaved ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-900 hover:bg-gray-800 text-white'}`}
+            >
+              {detSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : detSaved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+              {detSaving ? 'Salvando...' : detSaved ? 'Dados salvos!' : 'Salvar Dados Comerciais'}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Botões finais ── */}
+        <div className="space-y-3 pt-2 pb-4">
+          {/* Gerar Proposta Comercial */}
           <button
-            onClick={() => router.push('/memoria-calculo')}
-            className="btn-primary px-6 py-2.5 text-sm flex items-center gap-2"
+            onClick={openGenModal}
+            className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-2xl shadow-sm transition-all text-sm"
           >
-            <Save className="w-4 h-4" /> Concluir
+            <FileText className="w-4 h-4" />
+            Gerar Proposta Comercial
           </button>
+
+          <div className="flex items-center justify-between gap-3">
+            {lastSaved ? (
+              <span className="flex items-center gap-1.5 text-sm text-green-600 font-medium">
+                <CheckCircle2 className="w-4 h-4" /> Salvo às {lastSaved}
+              </span>
+            ) : (
+              <span className="text-xs text-gray-400">Itens salvos automaticamente</span>
+            )}
+            <button
+              onClick={() => router.push('/propostas')}
+              className="btn-secondary px-5 py-2 text-sm flex items-center gap-2"
+            >
+              <Save className="w-4 h-4" /> Concluir
+            </button>
+          </div>
         </div>
       </div>
 
@@ -644,6 +903,147 @@ export default function MemoriaCalculoClient({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Modal Gerar Proposta Comercial ══ */}
+      {showGenModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !genSaving && !genResult && setShowGenModal(false)} />
+          <div className="relative bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl z-10 max-h-[94vh] flex flex-col">
+
+            <div className="flex justify-center pt-3 pb-1 sm:hidden"><div className="w-10 h-1 bg-gray-200 rounded-full" /></div>
+
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <FileText className="w-4 h-4 text-blue-600" />
+                </div>
+                <h2 className="font-bold text-gray-900">Gerar Proposta Comercial</h2>
+              </div>
+              {!genResult && (
+                <button onClick={() => setShowGenModal(false)} className="p-2 hover:bg-gray-100 rounded-xl">
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
+
+              {/* Resultado após geração */}
+              {genResult ? (
+                <div className="space-y-4">
+                  <div className="flex flex-col items-center text-center gap-2 py-3">
+                    <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mb-1">
+                      <CheckCircle2 className="w-7 h-7 text-green-600" />
+                    </div>
+                    <p className="font-bold text-gray-900 text-lg">Proposta gerada!</p>
+                    <p className="text-sm text-gray-500">
+                      <span className="font-semibold text-blue-600">{genResult.proposalNumber}</span> · Status: <span className="text-cyan-600 font-medium">Enviada</span>
+                    </p>
+                  </div>
+
+                  {/* Link copyable */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center gap-2">
+                    <p className="flex-1 text-xs text-gray-600 font-mono truncate">{genResult.url}</p>
+                    <button
+                      onClick={handleCopyUrl}
+                      className={`shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${copied ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
+                    >
+                      {copied ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied ? 'Copiado!' : 'Copiar'}
+                    </button>
+                  </div>
+
+                  {/* Ações */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(`Olá! Segue a proposta ${genResult.proposalNumber}: ${genResult.url}`)}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl text-sm transition-colors"
+                    >
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+                      WhatsApp
+                    </a>
+                    <a
+                      href={genResult.url}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold rounded-xl text-sm transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" /> Ver proposta
+                    </a>
+                  </div>
+
+                  <button
+                    onClick={() => setShowGenModal(false)}
+                    className="w-full btn-secondary text-sm py-2.5"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-blue-50 rounded-xl p-3">
+                    <p className="text-xs text-blue-700 font-medium">{proposal.title}</p>
+                    <p className="text-xs text-blue-500 mt-0.5">{proposal.leads?.name ?? '—'} · Total: <span className="font-bold">{formatCurrency(totalFinal)}</span></p>
+                  </div>
+
+                  <div>
+                    <label className="label">Condições de pagamento</label>
+                    <textarea
+                      className="input resize-none text-sm"
+                      rows={3}
+                      placeholder="Ex: 50% na assinatura do contrato, 50% na conclusão dos serviços"
+                      value={genPaymentTerms}
+                      onChange={e => setGenPaymentTerms(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="label">Observações para o cliente <span className="text-gray-400 font-normal">(opcional)</span></label>
+                    <textarea
+                      className="input resize-none text-sm"
+                      rows={3}
+                      placeholder="Ex: Proposta válida para as condições do imóvel na data da visita técnica"
+                      value={genClientNotes}
+                      onChange={e => setGenClientNotes(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="label">Validade da proposta <span className="text-gray-400 font-normal">(opcional)</span></label>
+                    <input
+                      type="date"
+                      className="input text-sm"
+                      value={genExpiresAt}
+                      onChange={e => setGenExpiresAt(e.target.value)}
+                      min={new Date().toISOString().slice(0, 10)}
+                    />
+                  </div>
+
+                  {genError && (
+                    <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-xl flex items-start justify-between gap-2">
+                      <p className="text-xs text-red-700 font-medium">{genError}</p>
+                      <button onClick={() => setGenError(null)}><X className="w-3.5 h-3.5 text-red-400 shrink-0" /></button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {!genResult && (
+              <div className="flex gap-3 px-5 py-4 border-t border-gray-100 shrink-0">
+                <button onClick={() => setShowGenModal(false)} className="btn-secondary flex-1 text-sm" disabled={genSaving}>Cancelar</button>
+                <button
+                  onClick={handleGenerateProposal}
+                  disabled={genSaving}
+                  className="btn-primary flex-1 text-sm flex items-center justify-center gap-2"
+                >
+                  {genSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Gerando...</> : <><FileText className="w-4 h-4" /> Gerar proposta</>}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

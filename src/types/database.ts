@@ -66,6 +66,13 @@ export interface Database {
           bdi_tax: number | null
           bdi_insurance: number | null
           bdi_profit: number | null
+          public_token: string | null
+          proposal_number: string | null
+          payment_terms: string | null
+          client_notes: string | null
+          client_refs: Array<{ id: string; name: string; company: string; phone: string }> | null
+          laudo: string | null
+          memorial_descritivo: string | null
           created_by: string | null
           created_at: string
           updated_at: string
@@ -132,6 +139,17 @@ export interface Database {
           youtube: string | null
           tiktok: string | null
           logo_url: string | null
+          brand_color: string | null
+          about_text: string | null
+          proposal_tagline: string | null
+          cover_photo_url: string | null
+          portfolio_photos: string[] | null
+          client_names: string | null
+          methodology_title: string | null
+          methodology_steps: Array<{ step: number; title: string; items: string[] }> | null
+          closing_message: string | null
+          closing_photo_url: string | null
+          client_refs: Array<{ id: string; name: string; company: string; phone: string }> | null
           created_at: string
           updated_at: string
         }

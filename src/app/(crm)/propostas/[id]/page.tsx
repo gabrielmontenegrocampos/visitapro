@@ -12,7 +12,7 @@ export default async function PropostaDetailPage({
   const { id } = await params
   const supabase = await createClient()
 
-  const [proposalRes, itemsRes, bdiRes] = await Promise.all([
+  const [proposalRes, itemsRes, bdiRes, settingsRes] = await Promise.all([
     supabase
       .from('proposals')
       .select('*, leads(id, name, phone)')
@@ -30,6 +30,11 @@ export default async function PropostaDetailPage({
       .eq('proposal_id', id)
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true }),
+    supabase
+      .from('company_settings')
+      .select('client_refs')
+      .limit(1)
+      .maybeSingle(),
   ])
 
   if (!proposalRes.data) notFound()
@@ -39,6 +44,7 @@ export default async function PropostaDetailPage({
       proposal={proposalRes.data as any}
       items={(itemsRes.data ?? []) as any}
       bdiItems={(bdiRes.data ?? []) as any}
+      settingsRefs={(settingsRes.data?.client_refs ?? []) as any}
     />
   )
 }

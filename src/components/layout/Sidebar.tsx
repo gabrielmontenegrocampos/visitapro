@@ -6,18 +6,17 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, KanbanSquare, Calendar,
   Users, FileText, UserCircle, MapPin, PanelLeftOpen, PanelLeftClose,
-  Calculator, Settings,
+  Settings,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
-  { href: '/dashboard',       label: 'Dashboard',           icon: LayoutDashboard, exact: false },
-  { href: '/pipeline',        label: 'Pipeline',            icon: KanbanSquare,    exact: false },
-  { href: '/agenda',          label: 'Agenda',              icon: Calendar,        exact: false },
-  { href: '/leads',           label: 'Leads',               icon: Users,           exact: false },
-  { href: '/propostas',       label: 'Propostas',           icon: FileText,        exact: false },
-  { href: '/memoria-calculo', label: 'Memória de Cálculo', icon: Calculator, exact: false },
-  { href: '/vendedores',      label: 'Vendedores',          icon: UserCircle,      exact: false },
+  { href: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard, exact: false },
+  { href: '/pipeline',   label: 'Pipeline',   icon: KanbanSquare,    exact: false },
+  { href: '/agenda',     label: 'Agenda',     icon: Calendar,        exact: false },
+  { href: '/leads',      label: 'Leads',      icon: Users,           exact: false },
+  { href: '/propostas',  label: 'Propostas',  icon: FileText,        exact: false },
+  { href: '/vendedores', label: 'Vendedores', icon: UserCircle,      exact: false },
 ]
 
 const bottomItems = [

@@ -97,3 +97,27 @@ export async function uploadLogo(formData: FormData) {
   revalidatePath('/configuracoes')
   return { error: null, url: publicUrl }
 }
+
+export async function uploadProposalAsset(formData: FormData, prefix: string) {
+  const file = formData.get('file') as File | null
+  if (!file) return { error: 'Nenhum arquivo', url: null }
+
+  const admin = adminClient()
+  await ensureStorageBucket()
+
+  const ext  = file.name.split('.').pop() ?? 'jpg'
+  const path = `${prefix}-${Date.now()}.${ext}`
+  const bytes = await file.arrayBuffer()
+
+  const { error: upErr } = await admin.storage
+    .from('company-assets')
+    .upload(path, bytes, { upsert: true, contentType: file.type })
+
+  if (upErr) return { error: upErr.message, url: null }
+
+  const { data: { publicUrl } } = admin.storage
+    .from('company-assets')
+    .getPublicUrl(path)
+
+  return { error: null, url: publicUrl }
+}
