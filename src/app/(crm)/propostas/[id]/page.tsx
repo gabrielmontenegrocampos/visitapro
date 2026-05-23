@@ -12,7 +12,7 @@ export default async function PropostaDetailPage({
   const { id } = await params
   const supabase = await createClient()
 
-  const [proposalRes, itemsRes] = await Promise.all([
+  const [proposalRes, itemsRes, bdiRes] = await Promise.all([
     supabase
       .from('proposals')
       .select('*, leads(id, name, phone)')
@@ -20,6 +20,12 @@ export default async function PropostaDetailPage({
       .single(),
     supabase
       .from('proposal_items')
+      .select('*')
+      .eq('proposal_id', id)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('proposal_bdi_items')
       .select('*')
       .eq('proposal_id', id)
       .order('sort_order', { ascending: true })
@@ -32,6 +38,7 @@ export default async function PropostaDetailPage({
     <MemoriaCalculoClient
       proposal={proposalRes.data as any}
       items={(itemsRes.data ?? []) as any}
+      bdiItems={(bdiRes.data ?? []) as any}
     />
   )
 }

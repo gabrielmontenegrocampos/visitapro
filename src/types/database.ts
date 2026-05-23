@@ -77,6 +77,7 @@ export interface Database {
         Row: {
           id: string
           proposal_id: string
+          item_type: 'servico' | 'material' | 'equipamento' | null
           area_name: string | null
           service_type: string | null
           description: string | null
@@ -87,11 +88,24 @@ export interface Database {
           equipment_cost: number
           unit_price: number
           total_price: number
+          measurements: Array<{ id: string; label: string; height: number; width: number }> | null
           sort_order: number
           created_at: string
         }
         Insert: Omit<Database['public']['Tables']['proposal_items']['Row'], 'id' | 'total_price' | 'created_at'>
         Update: Partial<Database['public']['Tables']['proposal_items']['Insert']>
+      }
+      proposal_bdi_items: {
+        Row: {
+          id: string
+          proposal_id: string
+          label: string
+          percentage: number
+          sort_order: number
+          created_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['proposal_bdi_items']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['proposal_bdi_items']['Insert']>
       }
       visits: {
         Row: {
@@ -163,7 +177,8 @@ export type Profile = Database['public']['Tables']['profiles']['Row']
 export type PipelineStage = Database['public']['Tables']['pipeline_stages']['Row']
 export type Lead = Database['public']['Tables']['leads']['Row']
 export type Proposal = Database['public']['Tables']['proposals']['Row']
-export type ProposalItem = Database['public']['Tables']['proposal_items']['Row']
+export type ProposalItem    = Database['public']['Tables']['proposal_items']['Row']
+export type ProposalBdiItem = Database['public']['Tables']['proposal_bdi_items']['Row']
 export type Visit = Database['public']['Tables']['visits']['Row']
 export type Activity = Database['public']['Tables']['activities']['Row']
 export type Message = Database['public']['Tables']['messages']['Row']

@@ -11,58 +11,100 @@ function adminClient() {
   )
 }
 
-/** Recalcula proposals.value = sum(item.total_price) × BDI */
+/** Recalcula proposals.value usando itens + BDI flexível */
 async function recalculateValue(proposalId: string) {
   const admin = adminClient()
-  const [itemsRes, proposalRes] = await Promise.all([
+  const [itemsRes, bdiRes] = await Promise.all([
     admin.from('proposal_items').select('total_price').eq('proposal_id', proposalId),
-    admin.from('proposals').select('bdi_tax, bdi_insurance, bdi_profit').eq('id', proposalId).single(),
+    admin.from('proposal_bdi_items').select('percentage').eq('proposal_id', proposalId),
   ])
   const items    = (itemsRes.data ?? []) as { total_price: number }[]
-  const proposal = proposalRes.data as { bdi_tax: number | null; bdi_insurance: number | null; bdi_profit: number | null } | null
-  if (!proposal) return
+  const bdiItems = (bdiRes.data   ?? []) as { percentage: number }[]
 
   const directCost = items.reduce((s, i) => s + (i.total_price ?? 0), 0)
-  const bdiPct     = ((proposal.bdi_tax ?? 0) + (proposal.bdi_insurance ?? 0) + (proposal.bdi_profit ?? 0)) / 100
+  const bdiPct     = bdiItems.reduce((s, b) => s + (b.percentage ?? 0), 0) / 100
   const totalValue = directCost * (1 + bdiPct)
 
   await admin.from('proposals').update({ value: totalValue }).eq('id', proposalId)
 }
 
 // ---------------------------------------------------------------------------
+// Proposal Items
+// ---------------------------------------------------------------------------
 
-export interface ItemPayload {
+export type Measurement = { id: string; label: string; height: number; width: number }
+
+export interface ServiceItemPayload {
+  item_type: 'servico'
   area_name: string
   service_type: string
   unit: string
-  quantity: number
-  labor_cost: number
-  material_cost: number
-  equipment_cost: number
+  measurements: Measurement[]
+  quantity: number          // total m² = sum(h×w)
+  labor_cost: number        // custo MO por unidade
   description?: string | null
 }
 
+export interface SimpleItemPayload {
+  item_type: 'material' | 'equipamento'
+  area_name: string         // nome do item
+  unit: string
+  quantity: number
+  unit_price: number
+  description?: string | null
+}
+
+export type ItemPayload = ServiceItemPayload | SimpleItemPayload
+
 export async function createProposalItem(proposalId: string, data: ItemPayload) {
-  const admin     = adminClient()
-  const unitPrice = data.labor_cost + data.material_cost + data.equipment_cost
-  const totalPrice = data.quantity * unitPrice
+  const admin = adminClient()
+
+  let unitPrice: number
+  let totalPrice: number
+  let row: Record<string, unknown>
+
+  if (data.item_type === 'servico') {
+    unitPrice  = data.labor_cost
+    totalPrice = data.quantity * unitPrice
+    row = {
+      proposal_id:  proposalId,
+      item_type:    'servico',
+      area_name:    data.area_name,
+      service_type: data.service_type,
+      description:  data.description ?? null,
+      unit:         data.unit,
+      quantity:     data.quantity,
+      labor_cost:   data.labor_cost,
+      material_cost: 0,
+      equipment_cost: 0,
+      unit_price:   unitPrice,
+      total_price:  totalPrice,
+      measurements: data.measurements,
+      sort_order:   0,
+    }
+  } else {
+    unitPrice  = data.unit_price
+    totalPrice = data.quantity * unitPrice
+    row = {
+      proposal_id:  proposalId,
+      item_type:    data.item_type,
+      area_name:    data.area_name,
+      description:  data.description ?? null,
+      unit:         data.unit,
+      quantity:     data.quantity,
+      labor_cost:   0,
+      material_cost: 0,
+      equipment_cost: 0,
+      unit_price:   unitPrice,
+      total_price:  totalPrice,
+      measurements: [],
+      sort_order:   0,
+    }
+  }
 
   const { data: item, error } = await admin
     .from('proposal_items')
-    .insert({
-      proposal_id:    proposalId,
-      area_name:      data.area_name,
-      service_type:   data.service_type,
-      description:    data.description ?? null,
-      unit:           data.unit,
-      quantity:       data.quantity,
-      labor_cost:     data.labor_cost,
-      material_cost:  data.material_cost,
-      equipment_cost: data.equipment_cost,
-      unit_price:     unitPrice,
-      total_price:    totalPrice,
-      sort_order:     0,
-    })
+    .insert(row)
     .select()
     .single()
 
@@ -73,26 +115,46 @@ export async function createProposalItem(proposalId: string, data: ItemPayload) 
 }
 
 export async function updateProposalItem(itemId: string, proposalId: string, data: ItemPayload) {
-  const admin      = adminClient()
-  const unitPrice  = data.labor_cost + data.material_cost + data.equipment_cost
-  const totalPrice = data.quantity * unitPrice
+  const admin = adminClient()
 
-  const { error } = await admin
-    .from('proposal_items')
-    .update({
-      area_name:      data.area_name,
-      service_type:   data.service_type,
-      description:    data.description ?? null,
-      unit:           data.unit,
-      quantity:       data.quantity,
-      labor_cost:     data.labor_cost,
-      material_cost:  data.material_cost,
-      equipment_cost: data.equipment_cost,
-      unit_price:     unitPrice,
-      total_price:    totalPrice,
-    })
-    .eq('id', itemId)
+  let unitPrice: number
+  let totalPrice: number
+  let updates: Record<string, unknown>
 
+  if (data.item_type === 'servico') {
+    unitPrice  = data.labor_cost
+    totalPrice = data.quantity * unitPrice
+    updates = {
+      area_name:    data.area_name,
+      service_type: data.service_type,
+      description:  data.description ?? null,
+      unit:         data.unit,
+      quantity:     data.quantity,
+      labor_cost:   data.labor_cost,
+      material_cost: 0,
+      equipment_cost: 0,
+      unit_price:   unitPrice,
+      total_price:  totalPrice,
+      measurements: data.measurements,
+    }
+  } else {
+    unitPrice  = data.unit_price
+    totalPrice = data.quantity * unitPrice
+    updates = {
+      area_name:    data.area_name,
+      description:  data.description ?? null,
+      unit:         data.unit,
+      quantity:     data.quantity,
+      labor_cost:   0,
+      material_cost: 0,
+      equipment_cost: 0,
+      unit_price:   unitPrice,
+      total_price:  totalPrice,
+      measurements: [],
+    }
+  }
+
+  const { error } = await admin.from('proposal_items').update(updates).eq('id', itemId)
   if (error) return { error: error.message }
   await recalculateValue(proposalId)
   revalidatePath(`/propostas/${proposalId}`)
@@ -108,31 +170,55 @@ export async function deleteProposalItem(itemId: string, proposalId: string) {
   return { error: null }
 }
 
-export async function updateProposalBDI(
-  proposalId: string,
-  bdi: { tax: number; insurance: number; profit: number }
-) {
+// ---------------------------------------------------------------------------
+// BDI Items (flexíveis)
+// ---------------------------------------------------------------------------
+
+export async function createBdiItem(proposalId: string, data: { label: string; percentage: number }) {
+  const admin = adminClient()
+  const { data: item, error } = await admin
+    .from('proposal_bdi_items')
+    .insert({ proposal_id: proposalId, label: data.label, percentage: data.percentage })
+    .select()
+    .single()
+
+  if (error) return { error: error.message, data: null }
+  await recalculateValue(proposalId)
+  revalidatePath(`/propostas/${proposalId}`)
+  return { error: null, data: item }
+}
+
+export async function updateBdiItem(itemId: string, proposalId: string, data: { label: string; percentage: number }) {
   const admin = adminClient()
   const { error } = await admin
-    .from('proposals')
-    .update({ bdi_tax: bdi.tax, bdi_insurance: bdi.insurance, bdi_profit: bdi.profit })
-    .eq('id', proposalId)
+    .from('proposal_bdi_items')
+    .update({ label: data.label, percentage: data.percentage })
+    .eq('id', itemId)
 
   if (error) return { error: error.message }
   await recalculateValue(proposalId)
   revalidatePath(`/propostas/${proposalId}`)
-  revalidatePath('/propostas')
   return { error: null }
 }
+
+export async function deleteBdiItem(itemId: string, proposalId: string) {
+  const admin = adminClient()
+  const { error } = await admin.from('proposal_bdi_items').delete().eq('id', itemId)
+  if (error) return { error: error.message }
+  await recalculateValue(proposalId)
+  revalidatePath(`/propostas/${proposalId}`)
+  return { error: null }
+}
+
+// ---------------------------------------------------------------------------
+// Proposal status
+// ---------------------------------------------------------------------------
 
 export async function updateProposalStatus(proposalId: string, status: string) {
   const admin = adminClient()
   const { error } = await admin
     .from('proposals')
-    .update({
-      status,
-      sent_at: status === 'enviada' ? new Date().toISOString() : undefined,
-    })
+    .update({ status, sent_at: status === 'enviada' ? new Date().toISOString() : undefined })
     .eq('id', proposalId)
 
   if (error) return { error: error.message }
