@@ -107,6 +107,37 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['proposal_bdi_items']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['proposal_bdi_items']['Insert']>
       }
+      company_settings: {
+        Row: {
+          id: string
+          name: string | null
+          legal_name: string | null
+          document: string | null
+          document_type: 'cpf' | 'cnpj' | null
+          state_registration: string | null
+          municipal_registration: string | null
+          phone: string | null
+          whatsapp: string | null
+          email: string | null
+          cep: string | null
+          address: string | null
+          number: string | null
+          complement: string | null
+          neighborhood: string | null
+          city: string | null
+          state: string | null
+          website: string | null
+          instagram: string | null
+          facebook: string | null
+          youtube: string | null
+          tiktok: string | null
+          logo_url: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Partial<Omit<Database['public']['Tables']['company_settings']['Row'], 'id' | 'created_at' | 'updated_at'>>
+        Update: Partial<Omit<Database['public']['Tables']['company_settings']['Row'], 'id' | 'created_at' | 'updated_at'>>
+      }
       visits: {
         Row: {
           id: string
@@ -183,6 +214,7 @@ export type Visit = Database['public']['Tables']['visits']['Row']
 export type Activity = Database['public']['Tables']['activities']['Row']
 export type Message = Database['public']['Tables']['messages']['Row']
 export type DashboardMetrics = Database['public']['Views']['dashboard_metrics']['Row']
+export type CompanySettings = Database['public']['Tables']['company_settings']['Row']
 
 export type LeadWithStage = Lead & {
   pipeline_stages: PipelineStage | null

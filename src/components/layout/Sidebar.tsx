@@ -6,18 +6,22 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, KanbanSquare, Calendar,
   Users, FileText, UserCircle, MapPin, PanelLeftOpen, PanelLeftClose,
-  Calculator,
+  Calculator, Settings,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
-  { href: '/dashboard',  label: 'Dashboard',          icon: LayoutDashboard, exact: false },
-  { href: '/pipeline',   label: 'Pipeline',           icon: KanbanSquare,    exact: false },
-  { href: '/agenda',     label: 'Agenda',             icon: Calendar,        exact: false },
-  { href: '/leads',      label: 'Leads',              icon: Users,           exact: false },
-  { href: '/propostas',        label: 'Propostas',          icon: FileText,   exact: false },
-  { href: '/memoria-calculo',  label: 'Memória de Cálculo', icon: Calculator, exact: false },
-  { href: '/vendedores', label: 'Vendedores',         icon: UserCircle,      exact: false },
+  { href: '/dashboard',       label: 'Dashboard',           icon: LayoutDashboard, exact: false },
+  { href: '/pipeline',        label: 'Pipeline',            icon: KanbanSquare,    exact: false },
+  { href: '/agenda',          label: 'Agenda',              icon: Calendar,        exact: false },
+  { href: '/leads',           label: 'Leads',               icon: Users,           exact: false },
+  { href: '/propostas',       label: 'Propostas',           icon: FileText,        exact: false },
+  { href: '/memoria-calculo', label: 'Memória de Cálculo', icon: Calculator, exact: false },
+  { href: '/vendedores',      label: 'Vendedores',          icon: UserCircle,      exact: false },
+]
+
+const bottomItems = [
+  { href: '/configuracoes', label: 'Configurações', icon: Settings, exact: false },
 ]
 
 export default function Sidebar() {
@@ -25,7 +29,6 @@ export default function Sidebar() {
   const [pinned, setPinned] = useState(false)
   const [hovered, setHovered] = useState(false)
 
-  // Persist pin state
   useEffect(() => {
     const stored = localStorage.getItem('sidebar-pinned')
     if (stored === 'true') setPinned(true)
@@ -40,17 +43,29 @@ export default function Sidebar() {
 
   const expanded = pinned || hovered
 
+  function NavLink({ href, label, icon: Icon, exact }: { href: string; label: string; icon: any; exact: boolean }) {
+    const active = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/')
+    return (
+      <Link
+        href={href}
+        title={!expanded ? label : undefined}
+        className={cn(
+          'flex items-center gap-3 mx-2 my-0.5 rounded-xl text-sm font-medium transition-all',
+          expanded ? 'px-3 py-2.5' : 'px-0 py-2.5 justify-center',
+          active ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+        )}
+      >
+        <Icon className={cn('shrink-0 transition-colors', expanded ? 'w-4 h-4' : 'w-5 h-5', active ? 'text-blue-600' : 'text-gray-400')} />
+        {expanded && <span className="truncate">{label}</span>}
+        {active && !expanded && <span className="absolute left-[56px] w-1 h-6 bg-blue-600 rounded-r-full" />}
+      </Link>
+    )
+  }
+
   return (
     <>
-      {/* Flex placeholder — keeps layout stable */}
-      <div
-        className={cn(
-          'hidden md:block shrink-0 transition-[width] duration-200',
-          pinned ? 'w-60' : 'w-16'
-        )}
-      />
+      <div className={cn('hidden md:block shrink-0 transition-[width] duration-200', pinned ? 'w-60' : 'w-16')} />
 
-      {/* Actual sidebar panel — overlays when hovered but not pinned */}
       <aside
         className={cn(
           'hidden md:flex fixed top-0 left-0 h-full z-50 flex-col',
@@ -64,13 +79,11 @@ export default function Sidebar() {
       >
         {/* Header */}
         <div className={cn(
-          'flex items-center border-b border-gray-100 shrink-0 overflow-hidden',
-          'transition-[height] duration-200',
+          'flex items-center border-b border-gray-100 shrink-0 overflow-hidden transition-[height] duration-200',
           expanded ? 'h-[72px] px-4' : 'h-[64px] justify-center px-0'
         )}>
           {expanded ? (
             <div className="flex items-center justify-between w-full">
-              {/* Logo expanded */}
               <div className="flex items-center gap-2.5">
                 <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-blue-950 to-blue-700 shrink-0">
                   <MapPin className="w-5 h-5 text-white" strokeWidth={2.5} />
@@ -80,67 +93,27 @@ export default function Sidebar() {
                   <span className="text-gray-400 text-[10px] font-medium tracking-widest uppercase">CRM</span>
                 </div>
               </div>
-              {/* Pin button */}
-              <button
-                onClick={togglePin}
-                title={pinned ? 'Desafixar menu' : 'Fixar menu'}
-                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors shrink-0"
-              >
-                {pinned
-                  ? <PanelLeftClose className="w-4 h-4" />
-                  : <PanelLeftOpen className="w-4 h-4" />
-                }
+              <button onClick={togglePin} title={pinned ? 'Desafixar menu' : 'Fixar menu'}
+                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+                {pinned ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
               </button>
             </div>
           ) : (
-            /* Logo collapsed */
             <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-blue-950 to-blue-700">
               <MapPin className="w-5 h-5 text-white" strokeWidth={2.5} />
             </div>
           )}
         </div>
 
-        {/* Nav items */}
+        {/* Main nav */}
         <nav className="flex-1 py-3 overflow-hidden">
-          {navItems.map(({ href, label, icon: Icon, exact }, idx) => {
-            const active = exact
-              ? pathname === href
-              : pathname === href || pathname.startsWith(href + '/')
-            return (
-              <Link
-                key={`${href}-${idx}`}
-                href={href}
-                title={!expanded ? label : undefined}
-                className={cn(
-                  'flex items-center gap-3 mx-2 my-0.5 rounded-xl text-sm font-medium transition-all',
-                  expanded ? 'px-3 py-2.5' : 'px-0 py-2.5 justify-center',
-                  active
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                )}
-              >
-                <Icon
-                  className={cn('shrink-0 transition-colors', expanded ? 'w-4 h-4' : 'w-5 h-5',
-                    active ? 'text-blue-600' : 'text-gray-400'
-                  )}
-                />
-                {expanded && (
-                  <span className="truncate">{label}</span>
-                )}
-                {active && !expanded && (
-                  <span className="absolute left-[56px] w-1 h-6 bg-blue-600 rounded-r-full" />
-                )}
-              </Link>
-            )
-          })}
+          {navItems.map(item => <NavLink key={item.href} {...item} />)}
         </nav>
 
-        {/* Footer */}
-        {expanded && (
-          <div className="px-4 py-3 border-t border-gray-100">
-            <p className="text-xs text-gray-400 text-center truncate">Pintura & Reforma</p>
-          </div>
-        )}
+        {/* Bottom nav — Configurações */}
+        <div className="py-2 border-t border-gray-100">
+          {bottomItems.map(item => <NavLink key={item.href} {...item} />)}
+        </div>
       </aside>
     </>
   )
