@@ -33,7 +33,7 @@ export default function NovaProposta({ leads }: { leads: Lead[] }) {
         className="btn-primary flex items-center gap-2 text-sm"
       >
         <Plus className="w-4 h-4" />
-        <span className="hidden sm:inline">Nova Proposta</span>
+        <span className="hidden sm:inline">Nova Memória de Cálculo</span>
         <span className="sm:hidden">Nova</span>
       </button>
 
@@ -45,7 +45,7 @@ export default function NovaProposta({ leads }: { leads: Lead[] }) {
               <div className="w-10 h-1 bg-gray-200 rounded-full" />
             </div>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h2 className="font-bold text-gray-900">Nova Proposta</h2>
+              <h2 className="font-bold text-gray-900">Nova Memória de Cálculo</h2>
               <button onClick={() => setOpen(false)} className="p-2 hover:bg-gray-100 rounded-lg">
                 <X className="w-4 h-4 text-gray-500" />
               </button>
