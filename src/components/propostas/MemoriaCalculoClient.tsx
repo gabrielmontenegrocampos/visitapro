@@ -133,6 +133,7 @@ export default function MemoriaCalculoClient({
   const [showBdiAdd,  setShowBdiAdd]  = useState(false)
   const [bdiSaving,   setBdiSaving]   = useState(false)
   const [deletingBdi, setDeletingBdi] = useState<string | null>(null)
+  const [bdiError,    setBdiError]    = useState<string | null>(null)
 
   // -- Computed --------------------------------------------------------------
   const serviceItems   = items.filter(i => !i.item_type || i.item_type === 'servico')
@@ -255,24 +256,42 @@ export default function MemoriaCalculoClient({
   async function handleSaveBdi() {
     if (!bdiForm.label.trim()) return
     setBdiSaving(true)
+    setBdiError(null)
     const data = { label: bdiForm.label.trim(), percentage: parseFloat(bdiForm.percentage) || 0 }
     if (editingBdi) {
+      const prev_snapshot = bdiItems
       setBdiItems(prev => prev.map(b => b.id === editingBdi.id ? { ...b, ...data } : b))
       setShowBdiAdd(false); setBdiSaving(false)
-      await updateBdiItem(editingBdi.id, proposal.id, data)
+      const res = await updateBdiItem(editingBdi.id, proposal.id, data)
+      if (res.error) {
+        setBdiItems(prev_snapshot)  // rollback
+        setBdiError(`Erro ao atualizar: ${res.error}`)
+        setShowBdiAdd(true)
+      }
     } else {
       const tempId = `t${Date.now()}`
       setBdiItems(prev => [...prev, { id: tempId, proposal_id: proposal.id, sort_order: 0, created_at: '', ...data }])
       setShowBdiAdd(false); setBdiSaving(false)
-      const { data: saved } = await createBdiItem(proposal.id, data)
-      if (saved) setBdiItems(prev => prev.map(b => b.id === tempId ? (saved as BdiItemRow) : b))
+      const res = await createBdiItem(proposal.id, data)
+      if (res.error) {
+        setBdiItems(prev => prev.filter(b => b.id !== tempId))  // rollback
+        setBdiError(`Erro ao salvar: ${res.error}`)
+        setShowBdiAdd(true)
+      } else if (res.data) {
+        setBdiItems(prev => prev.map(b => b.id === tempId ? (res.data as BdiItemRow) : b))
+      }
     }
   }
 
   async function handleDeleteBdi(b: BdiItemRow) {
     setDeletingBdi(b.id)
+    const prev_snapshot = bdiItems
     setBdiItems(prev => prev.filter(x => x.id !== b.id))
-    await deleteBdiItem(b.id, proposal.id)
+    const res = await deleteBdiItem(b.id, proposal.id)
+    if (res.error) {
+      setBdiItems(prev_snapshot)  // rollback
+      setBdiError(`Erro ao remover: ${res.error}`)
+    }
     setDeletingBdi(null)
   }
 
@@ -400,6 +419,13 @@ export default function MemoriaCalculoClient({
             <Percent className="w-3.5 h-3.5 text-purple-700" />
             <span className="text-xs font-bold uppercase tracking-wider text-purple-700">BDI — Benefícios e Despesas Indiretas</span>
           </div>
+
+          {bdiError && (
+            <div className="px-4 py-3 bg-red-50 border-b border-red-100 flex items-start justify-between gap-3">
+              <p className="text-xs text-red-700 font-medium">{bdiError}</p>
+              <button onClick={() => setBdiError(null)} className="shrink-0 text-red-400 hover:text-red-600"><X className="w-3.5 h-3.5" /></button>
+            </div>
+          )}
 
           <div className="divide-y divide-gray-100">
             {bdiItems.map(b => (
