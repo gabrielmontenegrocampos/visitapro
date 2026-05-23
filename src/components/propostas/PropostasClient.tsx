@@ -6,6 +6,7 @@ import { Plus, Search, X, Loader2, CheckCircle, XCircle, Clock, FileText, Chevro
 import { createClient } from '@/lib/supabase/client'
 import { formatDate, formatCurrency, PROPOSAL_STATUS_LABELS } from '@/lib/utils'
 import SearchableSelect from '@/components/ui/SearchableSelect'
+import InlineEditTitle from '@/components/propostas/InlineEditTitle'
 import type { Proposal } from '@/types/database'
 
 interface Lead { id: string; name: string }
@@ -137,7 +138,13 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-gray-900 truncate">{p.leads?.name ?? '—'}</p>
-                  <p className="text-sm text-gray-500 truncate">{p.title}</p>
+                  <InlineEditTitle
+                    proposalId={p.id}
+                    title={p.title}
+                    onSaved={t => setProposals(prev => prev.map(x => x.id === p.id ? { ...x, title: t } : x))}
+                    className="text-sm text-gray-500"
+                    inputClassName="w-44"
+                  />
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[p.status]}`}>
@@ -189,7 +196,15 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                         {p.leads?.name ?? '—'}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">{p.title}</td>
+                    <td className="px-4 py-3 text-gray-600 max-w-[200px]">
+                      <InlineEditTitle
+                        proposalId={p.id}
+                        title={p.title}
+                        onSaved={t => setProposals(prev => prev.map(x => x.id === p.id ? { ...x, title: t } : x))}
+                        className="text-gray-600 text-sm"
+                        inputClassName="w-44"
+                      />
+                    </td>
                     <td className="px-4 py-3 font-semibold text-gray-900">{formatCurrency(p.value)}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[p.status]}`}>

@@ -14,6 +14,7 @@ import {
   type Measurement,
 } from '@/app/(crm)/propostas/[id]/actions'
 import SearchableSelect from '@/components/ui/SearchableSelect'
+import InlineEditTitle from '@/components/propostas/InlineEditTitle'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -388,7 +389,13 @@ export default function MemoriaCalculoClient({
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-gray-900 truncate leading-tight">{proposal.title}</p>
+            <InlineEditTitle
+              proposalId={proposal.id}
+              title={proposal.title}
+              onSaved={t => setProposal(p => ({ ...p, title: t }))}
+              className="font-bold text-gray-900 leading-tight max-w-full"
+              inputClassName="w-48 sm:w-72"
+            />
             <p className="text-xs text-gray-400 truncate">{proposal.leads?.name ?? '—'}</p>
           </div>
           <div className="shrink-0 flex items-center gap-2">
