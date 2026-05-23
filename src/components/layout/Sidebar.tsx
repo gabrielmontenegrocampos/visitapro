@@ -6,16 +6,18 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, KanbanSquare, Calendar,
   Users, FileText, UserCircle, MapPin, PanelLeftOpen, PanelLeftClose,
+  Calculator,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
-  { href: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
-  { href: '/pipeline',   label: 'Pipeline',   icon: KanbanSquare },
-  { href: '/agenda',     label: 'Agenda',     icon: Calendar },
-  { href: '/leads',      label: 'Leads',      icon: Users },
-  { href: '/propostas',  label: 'Propostas',  icon: FileText },
-  { href: '/vendedores', label: 'Vendedores', icon: UserCircle },
+  { href: '/dashboard',  label: 'Dashboard',          icon: LayoutDashboard, exact: false },
+  { href: '/pipeline',   label: 'Pipeline',           icon: KanbanSquare,    exact: false },
+  { href: '/agenda',     label: 'Agenda',             icon: Calendar,        exact: false },
+  { href: '/leads',      label: 'Leads',              icon: Users,           exact: false },
+  { href: '/propostas',  label: 'Propostas',          icon: FileText,        exact: true  },
+  { href: '/propostas',  label: 'Memória de Cálculo', icon: Calculator,      exact: false, activePrefix: '/propostas/' },
+  { href: '/vendedores', label: 'Vendedores',         icon: UserCircle,      exact: false },
 ]
 
 export default function Sidebar() {
@@ -100,11 +102,15 @@ export default function Sidebar() {
 
         {/* Nav items */}
         <nav className="flex-1 py-3 overflow-hidden">
-          {navItems.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || pathname.startsWith(href + '/')
+          {navItems.map(({ href, label, icon: Icon, exact, activePrefix }, idx) => {
+            const active = activePrefix
+              ? pathname.startsWith(activePrefix)
+              : exact
+                ? pathname === href
+                : pathname === href || pathname.startsWith(href + '/')
             return (
               <Link
-                key={href}
+                key={`${href}-${idx}`}
                 href={href}
                 title={!expanded ? label : undefined}
                 className={cn(

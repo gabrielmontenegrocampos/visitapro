@@ -133,8 +133,8 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
         {filtered.map((p) => {
           const Icon = STATUS_ICONS[p.status] ?? FileText
           return (
-            <div key={p.id} className="card p-4 space-y-3">
-              <Link href={`/propostas/${p.id}`} className="flex items-start justify-between gap-2 block">
+            <Link key={p.id} href={`/propostas/${p.id}`} className="card p-4 space-y-3 block hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-gray-900 truncate">{p.leads?.name ?? '—'}</p>
                   <p className="text-sm text-gray-500 truncate">{p.title}</p>
@@ -146,22 +146,18 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                   </span>
                   <ChevronRight className="w-4 h-4 text-gray-300" />
                 </div>
-              </Link>
+              </div>
 
               <div className="flex items-center justify-between">
                 <p className="text-lg font-bold text-gray-900">{formatCurrency(p.value)}</p>
                 <p className="text-xs text-gray-400">{formatDate(p.created_at)}</p>
               </div>
 
-              <div className="pt-2 border-t border-gray-100">
-                <label className="text-xs text-gray-500 mb-1 block">Atualizar status</label>
-                <SearchableSelect
-                  value={p.status}
-                  onChange={(v) => updateStatus(p.id, v as Proposal['status'])}
-                  options={Object.entries(PROPOSAL_STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
-                />
+              <div className="pt-2 border-t border-gray-100 flex items-center gap-1.5 text-xs text-blue-600 font-medium">
+                <ChevronRight className="w-3.5 h-3.5" />
+                Abrir memória de cálculo
               </div>
-            </div>
+            </Link>
           )
         })}
         {filtered.length === 0 && (
@@ -178,7 +174,7 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Cliente', 'Título', 'Valor', 'Status', 'Criada em', 'Ações'].map((h) => (
+                {['Cliente', 'Título', 'Valor', 'Status', 'Criada em', 'Cálculo', 'Status'].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -203,6 +199,15 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatDate(p.created_at)}</td>
                     <td className="px-4 py-3">
+                      <Link
+                        href={`/propostas/${p.id}`}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                        Abrir
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
                       <SearchableSelect
                         value={p.status}
                         onChange={(v) => updateStatus(p.id, v as Proposal['status'])}
@@ -213,7 +218,7 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                 )
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-400">Nenhuma proposta encontrada</td></tr>
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-400">Nenhuma proposta encontrada</td></tr>
               )}
             </tbody>
           </table>
