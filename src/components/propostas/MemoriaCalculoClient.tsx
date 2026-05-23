@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Plus, Trash2, Pencil, X, Loader2, Save,
-  Hammer, Package, Wrench, Percent,
+  Hammer, Package, Wrench, Percent, CheckCircle2,
 } from 'lucide-react'
 import { formatCurrency, PROPOSAL_STATUS_LABELS } from '@/lib/utils'
 import {
@@ -134,6 +134,7 @@ export default function MemoriaCalculoClient({
   const [bdiSaving,   setBdiSaving]   = useState(false)
   const [deletingBdi, setDeletingBdi] = useState<string | null>(null)
   const [bdiError,    setBdiError]    = useState<string | null>(null)
+  const [lastSaved,   setLastSaved]   = useState<string | null>(null)
 
   // -- Computed --------------------------------------------------------------
   const serviceItems   = items.filter(i => !i.item_type || i.item_type === 'servico')
@@ -154,6 +155,12 @@ export default function MemoriaCalculoClient({
 
   // Preview simples
   const simSubtotal = (parseFloat(simQty) || 0) * (parseFloat(simPrice) || 0)
+
+  // -- Utilitário salvo ------------------------------------------------------
+  function markSaved() {
+    const now = new Date()
+    setLastSaved(`${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`)
+  }
 
   // -- Abrir modais ----------------------------------------------------------
   function openAddService() {
@@ -215,6 +222,7 @@ export default function MemoriaCalculoClient({
         setModalType(null); setItemSaving(false)
         const { data } = await createProposalItem(proposal.id, payload)
         if (data) setItems(prev => prev.map(i => i.id === tempId ? (data as ItemRow) : i))
+        markSaved()
       }
     } else {
       if (!simName.trim() || !simQty || !simPrice) { setItemSaving(false); return }
@@ -230,6 +238,7 @@ export default function MemoriaCalculoClient({
         setItems(prev => prev.map(i => i.id === editingItem.id ? opt : i))
         setModalType(null); setItemSaving(false)
         await updateProposalItem(editingItem.id, proposal.id, payload)
+        markSaved()
       } else {
         const tempId = `t${Date.now()}`
         const opt: ItemRow = { id: tempId, proposal_id: proposal.id, ...payload, labor_cost: 0, service_type: null, measurements: [], unit_price: payload.unit_price, total_price: totalPrice, created_at: '' }
@@ -237,6 +246,7 @@ export default function MemoriaCalculoClient({
         setModalType(null); setItemSaving(false)
         const { data } = await createProposalItem(proposal.id, payload)
         if (data) setItems(prev => prev.map(i => i.id === tempId ? (data as ItemRow) : i))
+        markSaved()
       }
     }
   }
@@ -267,6 +277,8 @@ export default function MemoriaCalculoClient({
         setBdiItems(prev_snapshot)  // rollback
         setBdiError(`Erro ao atualizar: ${res.error}`)
         setShowBdiAdd(true)
+      } else {
+        markSaved()
       }
     } else {
       const tempId = `t${Date.now()}`
@@ -277,8 +289,9 @@ export default function MemoriaCalculoClient({
         setBdiItems(prev => prev.filter(b => b.id !== tempId))  // rollback
         setBdiError(`Erro ao salvar: ${res.error}`)
         setShowBdiAdd(true)
-      } else if (res.data) {
-        setBdiItems(prev => prev.map(b => b.id === tempId ? (res.data as BdiItemRow) : b))
+      } else {
+        if (res.data) setBdiItems(prev => prev.map(b => b.id === tempId ? (res.data as BdiItemRow) : b))
+        markSaved()
       }
     }
   }
@@ -372,6 +385,11 @@ export default function MemoriaCalculoClient({
             <p className="text-xs text-gray-400 truncate">{proposal.leads?.name ?? '—'}</p>
           </div>
           <div className="shrink-0 flex items-center gap-2">
+            {lastSaved && (
+              <span className="hidden sm:flex items-center gap-1 text-xs text-green-600 font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Salvo {lastSaved}
+              </span>
+            )}
             {statusSaving && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
             <div className="w-36">
               <SearchableSelect
@@ -539,6 +557,23 @@ export default function MemoriaCalculoClient({
               <span className="font-bold text-blue-700 text-2xl">{formatCurrency(totalFinal)}</span>
             </div>
           </div>
+        </div>
+
+        {/* ── Botão Concluir ── */}
+        <div className="flex items-center justify-between gap-3 pt-2 pb-4">
+          {lastSaved ? (
+            <span className="flex items-center gap-1.5 text-sm text-green-600 font-medium">
+              <CheckCircle2 className="w-4 h-4" /> Salvo às {lastSaved}
+            </span>
+          ) : (
+            <span className="text-xs text-gray-400">Itens salvos automaticamente</span>
+          )}
+          <button
+            onClick={() => router.push('/memoria-calculo')}
+            className="btn-primary px-6 py-2.5 text-sm flex items-center gap-2"
+          >
+            <Save className="w-4 h-4" /> Concluir
+          </button>
         </div>
       </div>
 
