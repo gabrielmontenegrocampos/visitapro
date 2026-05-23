@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Plus, Search, X, Loader2, CheckCircle, XCircle, Clock, FileText, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate, formatCurrency, PROPOSAL_STATUS_LABELS } from '@/lib/utils'
@@ -133,16 +134,19 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
           const Icon = STATUS_ICONS[p.status] ?? FileText
           return (
             <div key={p.id} className="card p-4 space-y-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
+              <Link href={`/propostas/${p.id}`} className="flex items-start justify-between gap-2 block">
+                <div className="min-w-0 flex-1">
                   <p className="font-semibold text-gray-900 truncate">{p.leads?.name ?? '—'}</p>
                   <p className="text-sm text-gray-500 truncate">{p.title}</p>
                 </div>
-                <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[p.status]}`}>
-                  <Icon className="w-3 h-3" />
-                  {PROPOSAL_STATUS_LABELS[p.status]}
-                </span>
-              </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[p.status]}`}>
+                    <Icon className="w-3 h-3" />
+                    {PROPOSAL_STATUS_LABELS[p.status]}
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-gray-300" />
+                </div>
+              </Link>
 
               <div className="flex items-center justify-between">
                 <p className="text-lg font-bold text-gray-900">{formatCurrency(p.value)}</p>
@@ -184,7 +188,11 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                 const Icon = STATUS_ICONS[p.status] ?? FileText
                 return (
                   <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-gray-900">{p.leads?.name ?? '—'}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900">
+                      <Link href={`/propostas/${p.id}`} className="hover:text-blue-600 transition-colors">
+                        {p.leads?.name ?? '—'}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">{p.title}</td>
                     <td className="px-4 py-3 font-semibold text-gray-900">{formatCurrency(p.value)}</td>
                     <td className="px-4 py-3">

@@ -63,6 +63,9 @@ export interface Database {
           status: 'rascunho' | 'enviada' | 'aceita' | 'recusada' | 'expirada'
           sent_at: string | null
           expires_at: string | null
+          bdi_tax: number | null
+          bdi_insurance: number | null
+          bdi_profit: number | null
           created_by: string | null
           created_at: string
           updated_at: string
@@ -74,10 +77,17 @@ export interface Database {
         Row: {
           id: string
           proposal_id: string
-          description: string
+          area_name: string | null
+          service_type: string | null
+          description: string | null
+          unit: string | null
           quantity: number
+          labor_cost: number
+          material_cost: number
+          equipment_cost: number
           unit_price: number
           total_price: number
+          sort_order: number
           created_at: string
         }
         Insert: Omit<Database['public']['Tables']['proposal_items']['Row'], 'id' | 'total_price' | 'created_at'>
