@@ -79,6 +79,30 @@ function toForm(s: CompanySettings | null): FormState {
   }
 }
 
+// ── Sub-componentes (fora do componente pai para evitar remount a cada keystroke) ──
+
+function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      {children}
+      {hint && <p className="text-[11px] text-gray-400 mt-1">{hint}</p>}
+    </div>
+  )
+}
+
+function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+  return (
+    <div className="card p-5 space-y-4">
+      <div className="flex items-center gap-2 pb-1 border-b border-gray-100">
+        <div className="text-blue-600">{icon}</div>
+        <h2 className="font-semibold text-gray-800 text-sm">{title}</h2>
+      </div>
+      {children}
+    </div>
+  )
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function ConfiguracoesClient({ settings }: { settings: CompanySettings | null }) {
@@ -166,29 +190,6 @@ export default function ConfiguracoesClient({ settings }: { settings: CompanySet
     if (res.error) setError(res.error)
     else setSaved(true)
     setSaving(false)
-  }
-
-  // ── UI helpers ────────────────────────────────────────────────────────────
-  function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
-    return (
-      <div>
-        <label className="label">{label}</label>
-        {children}
-        {hint && <p className="text-[11px] text-gray-400 mt-1">{hint}</p>}
-      </div>
-    )
-  }
-
-  function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
-    return (
-      <div className="card p-5 space-y-4">
-        <div className="flex items-center gap-2 pb-1 border-b border-gray-100">
-          <div className="text-blue-600">{icon}</div>
-          <h2 className="font-semibold text-gray-800 text-sm">{title}</h2>
-        </div>
-        {children}
-      </div>
-    )
   }
 
   const docDigits = rawDigits(form.document)
