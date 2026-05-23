@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Calculator, Plus, ChevronRight, FileText } from 'lucide-react'
+import { Calculator, ChevronRight, FileText, Plus } from 'lucide-react'
 import { formatCurrency, formatDate, PROPOSAL_STATUS_LABELS } from '@/lib/utils'
+import NovaProposta from '@/components/propostas/NovaProposta'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +17,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default async function MemoriaCalculoPage() {
   const supabase = await createClient()
 
-  const [propostasRes, itemsRes] = await Promise.all([
+  const [propostasRes, itemsRes, leadsRes] = await Promise.all([
     supabase
       .from('proposals')
       .select('*, leads(id, name, phone)')
@@ -24,10 +25,16 @@ export default async function MemoriaCalculoPage() {
     supabase
       .from('proposal_items')
       .select('proposal_id, total_price'),
+    supabase
+      .from('leads')
+      .select('id, name')
+      .order('name')
+      .limit(200),
   ])
 
   const proposals = propostasRes.data ?? []
-  const allItems  = itemsRes.data ?? []
+  const allItems  = itemsRes.data  ?? []
+  const leads     = leadsRes.data  ?? []
 
   // Agrupa itens por proposta
   const itemsByProposal = allItems.reduce<Record<string, { count: number; total: number }>>((acc, item) => {
@@ -45,20 +52,13 @@ export default async function MemoriaCalculoPage() {
           <h1 className="text-2xl font-bold text-gray-900">Memória de Cálculo</h1>
           <p className="text-gray-500 text-sm mt-1">Orçamentos com composição de custo por área e serviço</p>
         </div>
-        <Link
-          href="/propostas"
-          className="btn-primary flex items-center gap-2 text-sm"
-        >
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Nova Proposta</span>
-          <span className="sm:hidden">Nova</span>
-        </Link>
+        <NovaProposta leads={leads} />
       </div>
 
       {/* Cards */}
       <div className="space-y-3">
         {proposals.map((p) => {
-          const calc   = itemsByProposal[p.id]
+          const calc    = itemsByProposal[p.id]
           const hasCalc = !!calc
           return (
             <Link
@@ -114,9 +114,9 @@ export default async function MemoriaCalculoPage() {
             <FileText className="w-10 h-10 mx-auto mb-3 text-gray-300" />
             <p className="font-medium">Nenhuma proposta ainda</p>
             <p className="text-sm mt-1">Crie uma proposta para começar a memória de cálculo</p>
-            <Link href="/propostas" className="btn-primary inline-flex items-center gap-2 text-sm mt-4">
-              <Plus className="w-4 h-4" /> Nova proposta
-            </Link>
+            <div className="flex justify-center mt-4">
+              <NovaProposta leads={leads} />
+            </div>
           </div>
         )}
       </div>
