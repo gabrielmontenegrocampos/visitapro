@@ -110,20 +110,68 @@ export async function createLancamento(input: {
   status: 'pendente' | 'pago' | 'cancelado'
   projeto_id?: string | null
   observacoes?: string | null
+  recorrente?: boolean
+  recorrenciaMeses?: number
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado' }
 
   const admin = adminClient()
-  const { error } = await admin.from('lancamentos_financeiros').insert({
-    ...input,
+  const base = {
+    categoria_id: input.categoria_id,
+    tipo: input.tipo,
+    divisao: input.divisao,
+    descricao: input.descricao,
+    valor: input.valor,
+    status: input.status,
     projeto_id: input.projeto_id ?? null,
     observacoes: input.observacoes ?? null,
     created_by: user.id,
-  })
-  if (error) return { error: error.message }
+  }
+
+  if (input.recorrente && input.recorrenciaMeses && input.recorrenciaMeses > 1) {
+    // Gera ID de grupo para identificar a série
+    const grupoId = crypto.randomUUID()
+    const rows = []
+    for (let i = 0; i < input.recorrenciaMeses; i++) {
+      const d = new Date(input.data + 'T12:00:00')
+      d.setMonth(d.getMonth() + i)
+      rows.push({
+        ...base,
+        data: d.toISOString().split('T')[0],
+        // Primeiro mês mantém o status escolhido; os demais ficam pendentes
+        status: i === 0 ? input.status : 'pendente',
+        recorrencia_grupo_id: grupoId,
+        recorrencia_mes: i + 1,
+      })
+    }
+    const { error } = await admin.from('lancamentos_financeiros').insert(rows)
+    if (error) return { error: error.message }
+  } else {
+    const { error } = await admin.from('lancamentos_financeiros').insert({
+      ...base,
+      data: input.data,
+    })
+    if (error) return { error: error.message }
+  }
+
   revalidatePath('/financeiro')
+  revalidatePath('/financeiro/lancamentos')
+  return { error: null }
+}
+
+export async function cancelarRecorrencia(grupoId: string) {
+  const admin = adminClient()
+  // Cancela apenas os futuros (pendentes) da série
+  const hoje = new Date().toISOString().split('T')[0]
+  const { error } = await admin
+    .from('lancamentos_financeiros')
+    .update({ status: 'cancelado' })
+    .eq('recorrencia_grupo_id', grupoId)
+    .eq('status', 'pendente')
+    .gt('data', hoje)
+  if (error) return { error: error.message }
   revalidatePath('/financeiro/lancamentos')
   return { error: null }
 }

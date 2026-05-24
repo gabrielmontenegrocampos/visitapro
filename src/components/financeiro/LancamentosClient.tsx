@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Plus, Pencil, Trash2, ArrowUpRight, ArrowDownRight, Filter, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, ArrowUpRight, ArrowDownRight, Filter, X, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import type { CategoriaFinanceira } from '@/types/database'
-import { deleteLancamento } from '@/app/(crm)/financeiro/actions'
+import { deleteLancamento, cancelarRecorrencia } from '@/app/(crm)/financeiro/actions'
 import LancamentoModal from './LancamentoModal'
 
 interface Lancamento {
@@ -18,6 +18,8 @@ interface Lancamento {
   status: 'pendente' | 'pago' | 'cancelado'
   projeto_id: string | null
   observacoes: string | null
+  recorrencia_grupo_id: string | null
+  recorrencia_mes: number | null
   categorias_financeiras: { id: string; nome: string } | null
   projetos_diario: { id: string; nome: string } | null
 }
@@ -45,7 +47,9 @@ export default function LancamentosClient({ lancamentos: initial, categorias, pr
   const [showModal, setShowModal] = useState(false)
   const [editTarget, setEditTarget] = useState<Lancamento | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Lancamento | null>(null)
+  const [cancelRecorrTarget, setCancelRecorrTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [cancelingRecorr, setCancelingRecorr] = useState(false)
 
   // Filtros
   const [filtroTipo, setFiltroTipo] = useState('')
@@ -73,6 +77,15 @@ export default function LancamentosClient({ lancamentos: initial, categorias, pr
     setLancamentos(prev => prev.filter(l => l.id !== deleteTarget.id))
     setDeleteTarget(null)
     setDeleting(false)
+  }
+
+  async function handleCancelRecorrencia() {
+    if (!cancelRecorrTarget) return
+    setCancelingRecorr(true)
+    await cancelarRecorrencia(cancelRecorrTarget)
+    setCancelRecorrTarget(null)
+    setCancelingRecorr(false)
+    window.location.reload()
   }
 
   function handleSaved() {
@@ -202,7 +215,15 @@ export default function LancamentosClient({ lancamentos: initial, categorias, pr
                             : <ArrowDownRight size={11} className="text-red-500" />}
                         </div>
                         <div>
-                          <p className="font-medium text-gray-800">{l.descricao}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-medium text-gray-800">{l.descricao}</p>
+                            {l.recorrencia_grupo_id && (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full font-medium">
+                                <RefreshCw size={9} />
+                                {l.recorrencia_mes && `${l.recorrencia_mes}ª`}
+                              </span>
+                            )}
+                          </div>
                           {l.projetos_diario && (
                             <p className="text-xs text-gray-400">{l.projetos_diario.nome}</p>
                           )}
@@ -232,6 +253,14 @@ export default function LancamentosClient({ lancamentos: initial, categorias, pr
                             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
                             <Pencil size={13} />
                           </button>
+                          {l.recorrencia_grupo_id && l.status === 'pendente' && (
+                            <button
+                              onClick={() => setCancelRecorrTarget(l.recorrencia_grupo_id!)}
+                              title="Cancelar recorrência futura"
+                              className="p-1.5 rounded-lg hover:bg-amber-50 text-gray-400 hover:text-amber-500 transition-colors">
+                              <RefreshCw size={13} />
+                            </button>
+                          )}
                           <button onClick={() => setDeleteTarget(l)}
                             className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
                             <Trash2 size={13} />
@@ -266,6 +295,33 @@ export default function LancamentosClient({ lancamentos: initial, categorias, pr
           onSaved={handleSaved}
           initial={editTarget}
         />
+      )}
+
+      {/* Modal cancelar recorrência */}
+      {cancelRecorrTarget && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                <RefreshCw size={20} className="text-amber-600" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900">Cancelar recorrência?</h3>
+            </div>
+            <p className="text-sm text-gray-500 mb-5">
+              Todos os lançamentos <strong>futuros e pendentes</strong> desta série serão marcados como cancelados. Os já pagos não serão alterados.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setCancelRecorrTarget(null)}
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50">
+                Manter
+              </button>
+              <button onClick={handleCancelRecorrencia} disabled={cancelingRecorr}
+                className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white rounded-xl text-sm font-medium">
+                {cancelingRecorr ? 'Cancelando...' : 'Cancelar série'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal deletar */}

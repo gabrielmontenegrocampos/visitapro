@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, AlertCircle } from 'lucide-react'
+import { X, AlertCircle, RefreshCw } from 'lucide-react'
 import type { CategoriaFinanceira } from '@/types/database'
 import { createLancamento, updateLancamento } from '@/app/(crm)/financeiro/actions'
 
@@ -43,6 +43,8 @@ export default function LancamentoModal({ categorias, projetos, onClose, onSaved
   const [status, setStatus] = useState<'pendente' | 'pago' | 'cancelado'>(initial?.status ?? 'pago')
   const [projetoId, setProjetoId] = useState(projetoIdFixo ?? initial?.projeto_id ?? '')
   const [observacoes, setObservacoes] = useState(initial?.observacoes ?? '')
+  const [recorrente, setRecorrente] = useState(false)
+  const [recorrenciaMeses, setRecorrenciaMeses] = useState(3)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -72,6 +74,8 @@ export default function LancamentoModal({ categorias, projetos, onClose, onSaved
       status,
       projeto_id: divisao === 'obra' && projetoId ? projetoId : null,
       observacoes: observacoes.trim() || null,
+      recorrente: !initial && recorrente,
+      recorrenciaMeses: !initial && recorrente ? recorrenciaMeses : undefined,
     }
     const res = initial
       ? await updateLancamento(initial.id, payload)
@@ -245,6 +249,57 @@ export default function LancamentoModal({ categorias, projetos, onClose, onSaved
               rows={2} placeholder="Notas adicionais..."
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
           </div>
+
+          {/* Recorrência (só na criação) */}
+          {!initial && (
+            <div className={`rounded-xl border transition-colors ${recorrente ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-gray-50'}`}>
+              <button
+                type="button"
+                onClick={() => setRecorrente(v => !v)}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left"
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${recorrente ? 'bg-blue-600' : 'bg-gray-200'}`}>
+                  <RefreshCw size={15} className={recorrente ? 'text-white' : 'text-gray-500'} />
+                </div>
+                <div className="flex-1">
+                  <p className={`text-sm font-medium ${recorrente ? 'text-blue-800' : 'text-gray-700'}`}>
+                    Repetir mensalmente
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Cria lançamentos futuros automáticos com status pendente
+                  </p>
+                </div>
+                <div className={`w-10 h-5 rounded-full transition-colors relative ${recorrente ? 'bg-blue-600' : 'bg-gray-300'}`}>
+                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${recorrente ? 'left-5' : 'left-0.5'}`} />
+                </div>
+              </button>
+
+              {recorrente && (
+                <div className="px-4 pb-4 pt-1 border-t border-blue-100">
+                  <label className="block text-xs font-medium text-blue-700 mb-2">Repetir por quantos meses?</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[3, 6, 12, 24].map(m => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setRecorrenciaMeses(m)}
+                        className={`py-2 rounded-lg text-sm font-medium border transition-colors ${
+                          recorrenciaMeses === m
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'border-blue-200 text-blue-700 bg-white hover:bg-blue-50'
+                        }`}
+                      >
+                        {m}m
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-blue-600 mt-2">
+                    Serão criados {recorrenciaMeses} lançamentos — o 1º com status <strong>{status}</strong>, os demais como <strong>pendente</strong>
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {error && (
             <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg flex items-center gap-1.5">
