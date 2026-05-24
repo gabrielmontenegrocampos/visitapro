@@ -523,6 +523,27 @@ export default function MemoriaCalculoClient({
           </div>
         </div>
 
+        {/* ── Diário de Obra ── */}
+        {proposal.status === 'aceita' && (
+          <div className="card p-4 border border-amber-100 bg-amber-50/40 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                <BookOpen className="w-4 h-4 text-amber-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">Diário de Obra</p>
+                <p className="text-xs text-gray-500">Acompanhe a execução diária desta obra</p>
+              </div>
+            </div>
+            <a
+              href="/diario-obra"
+              className="shrink-0 text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1"
+            >
+              <BookOpen className="w-3.5 h-3.5" /> Abrir
+            </a>
+          </div>
+        )}
+
         {/* ── SERVIÇOS ── */}
         <div className="space-y-2">
           <SectionHeader icon={<Hammer className="w-3.5 h-3.5 text-blue-700" />} label="Serviços / Mão de Obra" color="bg-blue-50 text-blue-700" />

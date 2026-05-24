@@ -6,21 +6,22 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, KanbanSquare, Calendar,
   Users, FileText, UserCircle, MapPin, PanelLeftOpen, PanelLeftClose,
-  Settings,
+  Settings, BookOpen,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
-  { href: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard, exact: false },
-  { href: '/pipeline',   label: 'Pipeline',   icon: KanbanSquare,    exact: false },
-  { href: '/agenda',     label: 'Agenda',     icon: Calendar,        exact: false },
-  { href: '/leads',      label: 'Leads',      icon: Users,           exact: false },
-  { href: '/propostas',  label: 'Propostas',  icon: FileText,        exact: false },
-  { href: '/vendedores', label: 'Vendedores', icon: UserCircle,      exact: false },
+  { href: '/dashboard',   label: 'Dashboard',     icon: LayoutDashboard, exact: false },
+  { href: '/pipeline',    label: 'Pipeline',       icon: KanbanSquare,    exact: false },
+  { href: '/agenda',      label: 'Agenda',         icon: Calendar,        exact: false },
+  { href: '/leads',       label: 'Leads',          icon: Users,           exact: false },
+  { href: '/propostas',   label: 'Propostas',      icon: FileText,        exact: false },
+  { href: '/diario-obra', label: 'Diario de Obra', icon: BookOpen,        exact: false },
+  { href: '/vendedores',  label: 'Vendedores',     icon: UserCircle,      exact: false },
 ]
 
 const bottomItems = [
-  { href: '/configuracoes', label: 'Configurações', icon: Settings, exact: false },
+  { href: '/configuracoes', label: 'Configuracoes', icon: Settings, exact: false },
 ]
 
 export default function Sidebar() {
@@ -109,7 +110,7 @@ export default function Sidebar() {
           {navItems.map(item => <NavLink key={item.href} {...item} />)}
         </nav>
 
-        {/* Bottom nav — Configurações */}
+        {/* Bottom nav */}
         <div className="py-2 border-t border-gray-100">
           {bottomItems.map(item => <NavLink key={item.href} {...item} />)}
         </div>

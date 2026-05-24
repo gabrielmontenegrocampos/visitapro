@@ -2,15 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, KanbanSquare, Calendar, Users, FileText, Settings } from 'lucide-react'
+import { LayoutDashboard, KanbanSquare, Calendar, Users, FileText, BookOpen } from 'lucide-react'
 
 const navItems = [
-  { href: '/dashboard',     label: 'Início',    icon: LayoutDashboard },
-  { href: '/pipeline',      label: 'Pipeline',  icon: KanbanSquare },
-  { href: '/agenda',        label: 'Agenda',    icon: Calendar },
-  { href: '/leads',         label: 'Leads',     icon: Users },
-  { href: '/propostas',     label: 'Propostas', icon: FileText },
-  { href: '/configuracoes', label: 'Config.',   icon: Settings },
+  { href: '/dashboard',   label: 'Inicio',    icon: LayoutDashboard },
+  { href: '/pipeline',    label: 'Pipeline',  icon: KanbanSquare },
+  { href: '/agenda',      label: 'Agenda',    icon: Calendar },
+  { href: '/leads',       label: 'Leads',     icon: Users },
+  { href: '/propostas',   label: 'Propostas', icon: FileText },
+  { href: '/diario-obra', label: 'Diario',    icon: BookOpen },
 ]
 
 export default function BottomNav() {
