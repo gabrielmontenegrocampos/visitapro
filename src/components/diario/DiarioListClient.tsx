@@ -27,8 +27,13 @@ const CLIMA_EMOJI: Record<string, string> = {
   ensolarado: '☀️', parcialmente_nublado: '⛅', nublado: '☁️', chuvoso: '🌧️', tempestade: '⛈️',
 }
 
+const PROPOSAL_STATUS_LABELS: Record<string, string> = {
+  rascunho: 'Rascunho', enviada: 'Enviada', aceita: 'Aceita',
+  recusada: 'Recusada', expirada: 'Expirada',
+}
+
 interface ProposalOption {
-  id: string; title: string; value: number;
+  id: string; title: string; value: number; status: string;
   leads: { name: string; phone: string | null } | null
 }
 interface Registro {
@@ -297,9 +302,9 @@ export default function DiarioListClient({
                 Iniciar Diário de Obra
               </button>
             )}
-            {!search && proposals.length === 0 && (
+            {!search && proposals.length === 0 && projetos.length === 0 && (
               <p className="text-xs text-gray-400 mt-3">
-                Nenhuma proposta aceita disponível. Aceite uma proposta para iniciar o diário.
+                Nenhuma proposta encontrada. Crie uma proposta para iniciar o diário.
               </p>
             )}
           </div>
@@ -318,7 +323,7 @@ export default function DiarioListClient({
               </button>
             </div>
             <div className="p-5 space-y-4">
-              <p className="text-sm text-gray-500">Selecione a proposta aceita para iniciar o acompanhamento.</p>
+              <p className="text-sm text-gray-500">Selecione a proposta para iniciar o acompanhamento da obra.</p>
               <div>
                 <label className="label">Proposta *</label>
                 <SearchableSelect
@@ -329,13 +334,13 @@ export default function DiarioListClient({
                     { value: '', label: 'Selecione...' },
                     ...proposals.map(p => ({
                       value: p.id,
-                      label: `${p.leads?.name ?? '—'} — ${p.title}`,
+                      label: `${p.leads?.name ?? '—'} — ${p.title} [${PROPOSAL_STATUS_LABELS[p.status] ?? p.status}]`,
                     })),
                   ]}
                 />
                 {proposals.length === 0 && (
                   <p className="text-xs text-gray-400 mt-1">
-                    Todas as propostas aceitas já possuem diário.
+                    Todas as propostas já possuem diário iniciado.
                   </p>
                 )}
               </div>

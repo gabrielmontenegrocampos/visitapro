@@ -13,8 +13,7 @@ export default async function DiarioObraPage() {
       .order('created_at', { ascending: false }),
     supabase
       .from('proposals')
-      .select('id, title, value, lead_id, leads(id, name, phone)')
-      .eq('status', 'aceita')
+      .select('id, title, value, status, lead_id, leads(id, name, phone)')
       .order('created_at', { ascending: false }),
   ])
 
