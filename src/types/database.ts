@@ -234,6 +234,37 @@ export type Message = Database['public']['Tables']['messages']['Row']
 export type DashboardMetrics = Database['public']['Views']['dashboard_metrics']['Row']
 export type CompanySettings = Database['public']['Tables']['company_settings']['Row']
 
+export type CategoriaFinanceira = {
+  id: string
+  nome: string
+  tipo: 'receita' | 'despesa'
+  divisao: 'administracao' | 'obra'
+  ativo: boolean
+  created_at: string
+}
+
+export type LancamentoFinanceiro = {
+  id: string
+  categoria_id: string
+  tipo: 'receita' | 'despesa'
+  divisao: 'administracao' | 'obra'
+  descricao: string
+  valor: number
+  data: string
+  status: 'pendente' | 'pago' | 'cancelado'
+  projeto_id: string | null
+  observacoes: string | null
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export type LancamentoWithCategoria = LancamentoFinanceiro & {
+  categorias_financeiras: CategoriaFinanceira | null
+  projetos_diario: { id: string; nome: string } | null
+  profiles: Pick<Profile, 'id' | 'full_name'> | null
+}
+
 export type LeadWithStage = Lead & {
   pipeline_stages: PipelineStage | null
   profiles: Profile | null
