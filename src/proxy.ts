@@ -27,7 +27,10 @@ export async function proxy(request: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
 
   const isAuthPage = request.nextUrl.pathname.startsWith('/login')
-  const isPublic   = request.nextUrl.pathname === '/' || request.nextUrl.pathname.startsWith('/api/')
+  const isPublic   = request.nextUrl.pathname === '/'
+    || request.nextUrl.pathname.startsWith('/api/')
+    || request.nextUrl.pathname.startsWith('/p/')
+    || request.nextUrl.pathname.startsWith('/obra/')
 
   if (!session && !isAuthPage && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url))
