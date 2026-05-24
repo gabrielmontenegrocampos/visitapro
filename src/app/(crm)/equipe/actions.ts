@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient as adminCreate } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { AppRole } from '@/lib/roles'
 
@@ -77,5 +78,164 @@ export async function deleteMembro(id: string) {
   if (error) return { error: error.message }
 
   revalidatePath('/equipe')
+  return { error: null }
+}
+
+// ─── Profissionais ─────────────────────────────────────────────
+
+export async function getProfissionais() {
+  const admin = adminClient()
+  const { data } = await admin
+    .from('profissionais')
+    .select('*')
+    .order('nome')
+  return data ?? []
+}
+
+export async function getProfissional(id: string) {
+  const admin = adminClient()
+  const { data: prof } = await admin
+    .from('profissionais')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  const { data: obras } = await admin
+    .from('profissionais_obras')
+    .select('*, projetos_diario(id, nome, proposals(id, title, value))')
+    .eq('profissional_id', id)
+    .order('data_entrada', { ascending: false })
+
+  const { data: pagamentos } = await admin
+    .from('lancamentos_financeiros')
+    .select('*, categorias_financeiras(id, nome), projetos_diario(id, nome)')
+    .eq('profissional_id', id)
+    .order('data', { ascending: false })
+
+  return { prof, obras: obras ?? [], pagamentos: pagamentos ?? [] }
+}
+
+export async function createProfissional(input: {
+  nome: string
+  tipo: 'clt' | 'autonomo' | 'terceirizado'
+  especialidade: string
+  cpf: string | null
+  rg: string | null
+  data_nascimento: string | null
+  telefone: string | null
+  email: string | null
+  cep: string | null
+  endereco: string | null
+  numero: string | null
+  complemento: string | null
+  bairro: string | null
+  cidade: string | null
+  estado: string | null
+  banco: string | null
+  agencia: string | null
+  conta: string | null
+  pix: string | null
+  salario_base: number | null
+  valor_diaria: number | null
+  observacoes: string | null
+}) {
+  const admin = adminClient()
+  const { data, error } = await admin
+    .from('profissionais')
+    .insert({ ...input, ativo: true })
+    .select('id')
+    .single()
+  if (error) return { error: error.message, id: null }
+  revalidatePath('/equipe')
+  return { error: null, id: data.id }
+}
+
+export async function updateProfissional(id: string, input: Partial<{
+  nome: string
+  tipo: 'clt' | 'autonomo' | 'terceirizado'
+  especialidade: string
+  cpf: string | null
+  rg: string | null
+  data_nascimento: string | null
+  telefone: string | null
+  email: string | null
+  cep: string | null
+  endereco: string | null
+  numero: string | null
+  complemento: string | null
+  bairro: string | null
+  cidade: string | null
+  estado: string | null
+  banco: string | null
+  agencia: string | null
+  conta: string | null
+  pix: string | null
+  salario_base: number | null
+  valor_diaria: number | null
+  foto_url: string | null
+  ativo: boolean
+  observacoes: string | null
+}>) {
+  const admin = adminClient()
+  const { error } = await admin
+    .from('profissionais')
+    .update({ ...input, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/equipe')
+  revalidatePath(`/equipe/profissionais/${id}`)
+  return { error: null }
+}
+
+export async function deleteProfissional(id: string) {
+  const admin = adminClient()
+  const { error } = await admin
+    .from('profissionais')
+    .update({ ativo: false })
+    .eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/equipe')
+  return { error: null }
+}
+
+export async function uploadFotoProfissional(id: string, formData: FormData) {
+  const admin = adminClient()
+  const file = formData.get('file') as File
+  if (!file) return { error: 'Arquivo não encontrado', url: null }
+  const ext = file.name.split('.').pop() ?? 'jpg'
+  const path = `profissionais/${id}.${ext}`
+  const bytes = await file.arrayBuffer()
+  const { error: upErr } = await admin.storage
+    .from('company-assets')
+    .upload(path, bytes, { contentType: file.type, upsert: true })
+  if (upErr) return { error: upErr.message, url: null }
+  const { data } = admin.storage.from('company-assets').getPublicUrl(path)
+  await admin.from('profissionais').update({ foto_url: data.publicUrl }).eq('id', id)
+  revalidatePath(`/equipe/profissionais/${id}`)
+  return { error: null, url: data.publicUrl }
+}
+
+// ─── Profissionais × Obras ─────────────────────────────────────
+
+export async function vincularProfissionalObra(input: {
+  profissional_id: string
+  projeto_id: string
+  data_entrada: string
+  funcao: string | null
+}) {
+  const admin = adminClient()
+  const { error } = await admin.from('profissionais_obras').insert(input)
+  if (error) return { error: error.message }
+  revalidatePath('/equipe')
+  return { error: null }
+}
+
+export async function encerrarVinculoObra(id: string, data_saida: string) {
+  const admin = adminClient()
+  const { error } = await admin
+    .from('profissionais_obras')
+    .update({ data_saida })
+    .eq('id', id)
+  if (error) return { error: error.message }
   return { error: null }
 }

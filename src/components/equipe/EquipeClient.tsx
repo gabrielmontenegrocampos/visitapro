@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Users, Calendar, UserCheck, UserX, Plus, Pencil, X,
-  Loader2, CheckCircle, Phone, Trash2, AlertTriangle, Shield,
+  Loader2, CheckCircle, Phone, Trash2, AlertTriangle, Shield, HardHat,
 } from 'lucide-react'
 import { getInitials } from '@/lib/utils'
 import { maskPhone } from '@/lib/masks'
@@ -12,6 +12,8 @@ import { ROLE_LABELS, ROLE_COLORS, type AppRole } from '@/lib/roles'
 import { createMembro, updateMembro, deleteMembro } from '@/app/(crm)/equipe/actions'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import type { Profile } from '@/types/database'
+import ProfissionaisTab from './ProfissionaisTab'
+import type { Profissional } from './ProfissionaisTab'
 
 type ProfileWithCounts = Profile & { leadsCount: number; visitsCount: number }
 
@@ -26,9 +28,10 @@ const ROLES: { value: AppRole; label: string; description: string }[] = [
 const emptyNew = { email: '', full_name: '', phone: '', role: 'vendedor' as AppRole, password: '' }
 const emptyEdit = { full_name: '', phone: '', role: 'vendedor' as AppRole, active: true, password: '' }
 
-export default function EquipeClient({ profiles: initial }: { profiles: ProfileWithCounts[] }) {
+export default function EquipeClient({ profiles: initial, profissionais }: { profiles: ProfileWithCounts[], profissionais: Profissional[] }) {
   const router = useRouter()
   const [profiles, setProfiles] = useState(initial)
+  const [activeTab, setActiveTab] = useState<'usuarios' | 'colaboradores'>('usuarios')
 
   // Criar
   const [showNew, setShowNew]   = useState(false)
@@ -108,6 +111,27 @@ export default function EquipeClient({ profiles: initial }: { profiles: ProfileW
 
   return (
     <>
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-gray-200 mb-4">
+        <button onClick={() => setActiveTab('usuarios')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'usuarios' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}>
+          <Users size={15} /> Usuários do sistema
+          <span className="ml-1 text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">{profiles.length}</span>
+        </button>
+        <button onClick={() => setActiveTab('colaboradores')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'colaboradores' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}>
+          <HardHat size={15} /> Colaboradores
+          <span className="ml-1 text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">{profissionais.length}</span>
+        </button>
+      </div>
+
+      {activeTab === 'colaboradores' && <ProfissionaisTab profissionais={profissionais} />}
+
+      {activeTab === 'usuarios' && <>
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
         {/* Filtros de role */}
@@ -404,6 +428,7 @@ export default function EquipeClient({ profiles: initial }: { profiles: ProfileW
           </div>
         </div>
       )}
+      </>}
     </>
   )
 }

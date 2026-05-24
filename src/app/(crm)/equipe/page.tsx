@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import EquipeClient from '@/components/equipe/EquipeClient'
+import { getProfissionais } from './actions'
 import type { Profile } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
@@ -44,13 +45,15 @@ export default async function EquipePage() {
     visitsCount: visitsCount[p.id] ?? 0,
   }))
 
+  const profissionais = await getProfissionais()
+
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Equipe</h1>
-        <p className="text-gray-500 text-sm mt-1">Gerencie os usuários e seus acessos</p>
+        <p className="text-gray-500 text-sm mt-1">Usuários do sistema e colaboradores de campo</p>
       </div>
-      <EquipeClient profiles={profilesWithCounts} />
+      <EquipeClient profiles={profilesWithCounts} profissionais={profissionais as any} />
     </div>
   )
 }
