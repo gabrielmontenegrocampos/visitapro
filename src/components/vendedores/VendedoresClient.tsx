@@ -10,8 +10,9 @@ import type { Profile } from '@/types/database'
 
 type ProfileWithCounts = Profile & { leadsCount: number; visitsCount: number }
 
-const emptyInvite = { email: '', full_name: '', phone: '', role: 'vendedor' as 'admin' | 'vendedor', password: '' }
-const emptyEdit = { full_name: '', phone: '', role: 'vendedor' as 'admin' | 'vendedor', active: true, password: '' }
+import type { AppRole } from '@/lib/roles'
+const emptyInvite = { email: '', full_name: '', phone: '', role: 'vendedor' as AppRole, password: '' }
+const emptyEdit = { full_name: '', phone: '', role: 'vendedor' as AppRole, active: true, password: '' }
 
 export default function VendedoresClient({ profiles: initial }: { profiles: ProfileWithCounts[] }) {
   const [profiles, setProfiles] = useState(initial)

@@ -106,10 +106,8 @@ export default function DiarioListClient({
     const titulo = formTitulo.trim() || sel?.title || ''
     const res = await createProjeto(formProposal, titulo)
     if (res.error) { setSaveErr(res.error); setSaving(false); return }
-    setShowModal(false)
-    setFormProposal(''); setFormTitulo('')
-    router.refresh()
-    setSaving(false)
+    // Navega direto para o diário recém-criado
+    router.push(`/diario-obra/${res.data!.id}`)
   }
 
   async function toggleAtivo(projeto: Projeto) {

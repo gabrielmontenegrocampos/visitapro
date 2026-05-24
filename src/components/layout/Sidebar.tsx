@@ -6,28 +6,33 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, KanbanSquare, Calendar,
   Users, FileText, UserCircle, MapPin, PanelLeftOpen, PanelLeftClose,
-  Settings, BookOpen,
+  Settings, BookOpen, DollarSign,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { canAccessRoute } from '@/lib/roles'
 
-const navItems = [
-  { href: '/dashboard',   label: 'Dashboard',     icon: LayoutDashboard, exact: false },
-  { href: '/pipeline',    label: 'Pipeline',       icon: KanbanSquare,    exact: false },
-  { href: '/agenda',      label: 'Agenda',         icon: Calendar,        exact: false },
-  { href: '/leads',       label: 'Leads',          icon: Users,           exact: false },
-  { href: '/propostas',   label: 'Propostas',      icon: FileText,        exact: false },
-  { href: '/diario-obra', label: 'Diario de Obra', icon: BookOpen,        exact: false },
-  { href: '/vendedores',  label: 'Vendedores',     icon: UserCircle,      exact: false },
+const ALL_NAV_ITEMS = [
+  { href: '/dashboard',   label: 'Dashboard',     icon: LayoutDashboard },
+  { href: '/pipeline',    label: 'Pipeline',       icon: KanbanSquare    },
+  { href: '/agenda',      label: 'Agenda',         icon: Calendar        },
+  { href: '/leads',       label: 'Leads',          icon: Users           },
+  { href: '/propostas',   label: 'Propostas',      icon: FileText        },
+  { href: '/diario-obra', label: 'Diário de Obra', icon: BookOpen        },
+  { href: '/financeiro',  label: 'Financeiro',     icon: DollarSign      },
+  { href: '/equipe',      label: 'Equipe',         icon: UserCircle      },
 ]
 
-const bottomItems = [
-  { href: '/configuracoes', label: 'Configuracoes', icon: Settings, exact: false },
+const ALL_BOTTOM_ITEMS = [
+  { href: '/configuracoes', label: 'Configurações', icon: Settings },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ role }: { role: string }) {
   const pathname = usePathname()
   const [pinned, setPinned] = useState(false)
   const [hovered, setHovered] = useState(false)
+
+  const navItems    = ALL_NAV_ITEMS.filter(i => canAccessRoute(role, i.href))
+  const bottomItems = ALL_BOTTOM_ITEMS.filter(i => canAccessRoute(role, i.href))
 
   useEffect(() => {
     const stored = localStorage.getItem('sidebar-pinned')
@@ -43,8 +48,8 @@ export default function Sidebar() {
 
   const expanded = pinned || hovered
 
-  function NavLink({ href, label, icon: Icon, exact }: { href: string; label: string; icon: any; exact: boolean }) {
-    const active = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/')
+  function NavLink({ href, label, icon: Icon }: { href: string; label: string; icon: any }) {
+    const active = pathname === href || pathname.startsWith(href + '/')
     return (
       <Link
         href={href}
@@ -111,9 +116,11 @@ export default function Sidebar() {
         </nav>
 
         {/* Bottom nav */}
-        <div className="py-2 border-t border-gray-100">
-          {bottomItems.map(item => <NavLink key={item.href} {...item} />)}
-        </div>
+        {bottomItems.length > 0 && (
+          <div className="py-2 border-t border-gray-100">
+            {bottomItems.map(item => <NavLink key={item.href} {...item} />)}
+          </div>
+        )}
       </aside>
     </>
   )

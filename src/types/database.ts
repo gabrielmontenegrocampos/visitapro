@@ -9,7 +9,7 @@ export interface Database {
           full_name: string
           email: string
           phone: string | null
-          role: 'admin' | 'vendedor'
+          role: 'admin' | 'gerente' | 'vendedor' | 'financeiro' | 'encarregado'
           avatar_url: string | null
           active: boolean
           created_at: string

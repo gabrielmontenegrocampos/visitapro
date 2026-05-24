@@ -1,10 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { can } from '@/lib/roles'
 import DiarioListClient from '@/components/diario/DiarioListClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function DiarioObraPage() {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+  const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (!can(me?.role ?? '', 'diario_view')) redirect('/dashboard')
 
   const [projetosRes, proposalsRes] = await Promise.all([
     supabase
