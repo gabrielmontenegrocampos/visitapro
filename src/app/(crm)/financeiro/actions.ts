@@ -165,17 +165,18 @@ export async function deleteLancamento(id: string) {
 export async function getDashboardFinanceiro() {
   const admin = adminClient()
 
-  // Busca todos lançamentos pagos do ano atual
+  // Busca todos lançamentos do ano atual
   const anoAtual = new Date().getFullYear()
   const { data: lancamentos } = await admin
     .from('lancamentos_financeiros')
-    .select('tipo, divisao, valor, data, status, categorias_financeiras(nome)')
+    .select('tipo, divisao, valor, data, status, projeto_id, categorias_financeiras(nome)')
     .gte('data', `${anoAtual}-01-01`)
     .lte('data', `${anoAtual}-12-31`)
     .neq('status', 'cancelado')
 
   const todos = lancamentos ?? []
 
+  // Totais gerais (pagos)
   const receitas = todos.filter(l => l.tipo === 'receita' && l.status === 'pago')
     .reduce((s, l) => s + Number(l.valor), 0)
   const despesas = todos.filter(l => l.tipo === 'despesa' && l.status === 'pago')
@@ -184,6 +185,31 @@ export async function getDashboardFinanceiro() {
     .reduce((s, l) => s + Number(l.valor), 0)
   const aPagar = todos.filter(l => l.tipo === 'despesa' && l.status === 'pendente')
     .reduce((s, l) => s + Number(l.valor), 0)
+
+  // Split administração vs obra
+  const adm = todos.filter(l => l.divisao === 'administracao')
+  const admReceitas = adm.filter(l => l.tipo === 'receita' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
+  const admDespesas = adm.filter(l => l.tipo === 'despesa' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
+
+  const obras = todos.filter(l => l.divisao === 'obra')
+  const obrasReceitas = obras.filter(l => l.tipo === 'receita' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
+  const obrasDespesas = obras.filter(l => l.tipo === 'despesa' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
+
+  // Resumo por projeto (obras vinculadas)
+  const projetoIds = [...new Set(obras.filter(l => l.projeto_id).map(l => l.projeto_id as string))]
+  let porProjeto: { id: string; nome: string; receitas: number; despesas: number; saldo: number }[] = []
+  if (projetoIds.length > 0) {
+    const { data: projetos } = await admin
+      .from('projetos_diario')
+      .select('id, nome')
+      .in('id', projetoIds)
+    porProjeto = (projetos ?? []).map(p => {
+      const pl = obras.filter(l => l.projeto_id === p.id)
+      const pr = pl.filter(l => l.tipo === 'receita' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
+      const pd = pl.filter(l => l.tipo === 'despesa' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
+      return { id: p.id, nome: p.nome, receitas: pr, despesas: pd, saldo: pr - pd }
+    })
+  }
 
   // Dados por mês (últimos 6 meses)
   const meses: { mes: string; receitas: number; despesas: number }[] = []
@@ -204,7 +230,7 @@ export async function getDashboardFinanceiro() {
   // Últimos 8 lançamentos
   const { data: recentes } = await admin
     .from('lancamentos_financeiros')
-    .select('*, categorias_financeiras(id, nome, tipo, divisao)')
+    .select('*, categorias_financeiras(id, nome, tipo, divisao), projetos_diario(id, nome)')
     .order('created_at', { ascending: false })
     .limit(8)
 
@@ -216,5 +242,8 @@ export async function getDashboardFinanceiro() {
     aPagar,
     meses,
     recentes: recentes ?? [],
+    adm: { receitas: admReceitas, despesas: admDespesas, saldo: admReceitas - admDespesas },
+    obras: { receitas: obrasReceitas, despesas: obrasDespesas, saldo: obrasReceitas - obrasDespesas },
+    porProjeto,
   }
 }
