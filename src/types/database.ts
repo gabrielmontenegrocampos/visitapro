@@ -265,6 +265,31 @@ export type LancamentoWithCategoria = LancamentoFinanceiro & {
   profiles: Pick<Profile, 'id' | 'full_name'> | null
 }
 
+export type ProjetoComProposta = {
+  id: string
+  nome: string
+  proposal_id: string | null
+  proposals: {
+    id: string
+    title: string
+    value: number
+    status: string
+    leads: { id: string; name: string; phone: string | null } | null
+  } | null
+}
+
+export type ResultadoObra = {
+  projeto: ProjetoComProposta
+  valorOrcado: number
+  receitas: number
+  despesas: number
+  resultado: number
+  margem: number        // %
+  desvio: number        // receitas - valorOrcado
+  desvioPerc: number    // %
+  lancamentos: LancamentoWithCategoria[]
+}
+
 export type LeadWithStage = Lead & {
   pipeline_stages: PipelineStage | null
   profiles: Profile | null

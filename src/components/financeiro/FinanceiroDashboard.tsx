@@ -26,13 +26,14 @@ interface DashboardData {
 interface Props {
   dashboard: DashboardData
   categorias: CategoriaFinanceira[]
+  projetos: { id: string; nome: string; proposals?: { value: number; title: string } | null }[]
 }
 
 function fmt(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-export default function FinanceiroDashboard({ dashboard, categorias }: Props) {
+export default function FinanceiroDashboard({ dashboard, categorias, projetos }: Props) {
   const [showModal, setShowModal] = useState(false)
 
   const maxBar = Math.max(...dashboard.meses.map(m => Math.max(m.receitas, m.despesas)), 1)
@@ -145,32 +146,45 @@ export default function FinanceiroDashboard({ dashboard, categorias }: Props) {
       {/* Por projeto */}
       {dashboard.porProjeto.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Resultado por obra</h2>
-          <div className="space-y-3">
-            {dashboard.porProjeto.map(p => (
-              <div key={p.id} className="flex items-center gap-4 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
-                <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
-                  <HardHat size={15} className="text-orange-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{p.nome}</p>
-                </div>
-                <div className="flex gap-4 text-right shrink-0">
-                  <div>
-                    <p className="text-xs text-gray-400">Receitas</p>
-                    <p className="text-sm font-semibold text-green-600">{fmt(p.receitas)}</p>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-gray-700">Resultado por obra</h2>
+            <span className="text-xs text-gray-400">Clique para detalhar</span>
+          </div>
+          <div className="space-y-2">
+            {dashboard.porProjeto.map(p => {
+              const status = p.saldo > 0 ? 'lucro' : p.saldo < 0 ? 'prejuizo' : 'neutro'
+              return (
+                <Link key={p.id} href={`/financeiro/obras/${p.id}`}
+                  className="flex items-center gap-4 p-3 rounded-xl bg-gray-50 hover:bg-blue-50 hover:border-blue-100 border border-transparent transition-colors group">
+                  <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+                    <HardHat size={15} className="text-orange-600" />
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Despesas</p>
-                    <p className="text-sm font-semibold text-red-500">{fmt(p.despesas)}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate group-hover:text-blue-700">{p.nome}</p>
+                    <p className="text-xs text-gray-400">
+                      {status === 'lucro' && '✓ Com lucro'}
+                      {status === 'prejuizo' && '⚠ Com prejuízo'}
+                      {status === 'neutro' && '— Neutro'}
+                    </p>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Saldo</p>
-                    <p className={`text-sm font-bold ${p.saldo >= 0 ? 'text-blue-700' : 'text-red-600'}`}>{fmt(p.saldo)}</p>
+                  <div className="flex gap-4 text-right shrink-0">
+                    <div>
+                      <p className="text-xs text-gray-400">Receitas</p>
+                      <p className="text-sm font-semibold text-green-600">{fmt(p.receitas)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Despesas</p>
+                      <p className="text-sm font-semibold text-red-500">{fmt(p.despesas)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Resultado</p>
+                      <p className={`text-sm font-bold ${p.saldo >= 0 ? 'text-blue-700' : 'text-red-600'}`}>{fmt(p.saldo)}</p>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                  <ArrowUpRight size={14} className="text-gray-300 group-hover:text-blue-400 shrink-0" />
+                </Link>
+              )
+            })}
           </div>
         </div>
       )}
@@ -238,7 +252,7 @@ export default function FinanceiroDashboard({ dashboard, categorias }: Props) {
       {showModal && (
         <LancamentoModal
           categorias={categorias}
-          projetos={[]}
+          projetos={projetos}
           onClose={() => setShowModal(false)}
           onSaved={() => { setShowModal(false); window.location.reload() }}
         />

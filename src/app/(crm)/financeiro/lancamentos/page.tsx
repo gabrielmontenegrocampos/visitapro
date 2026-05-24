@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { can } from '@/lib/roles'
-import { getLancamentos, getCategorias } from '../actions'
+import { getLancamentos, getCategorias, getProjetosParaLancamento } from '../actions'
 import LancamentosClient from '@/components/financeiro/LancamentosClient'
 
 export const dynamic = 'force-dynamic'
@@ -15,22 +15,17 @@ export default async function LancamentosPage() {
 
   const role = me?.role ?? 'vendedor'
 
-  const [lancamentos, categorias] = await Promise.all([
+  const [lancamentos, categorias, projetos] = await Promise.all([
     getLancamentos(),
     getCategorias(),
+    getProjetosParaLancamento(),
   ])
-
-  // Projetos para vincular lançamentos de obra
-  const { data: projetos } = await supabase
-    .from('projetos_diario')
-    .select('id, nome')
-    .order('created_at', { ascending: false })
 
   return (
     <LancamentosClient
       lancamentos={lancamentos as any}
       categorias={categorias as any}
-      projetos={projetos ?? []}
+      projetos={projetos}
       canEdit={can(role, 'financeiro_edit')}
     />
   )

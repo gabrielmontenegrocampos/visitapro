@@ -247,3 +247,64 @@ export async function getDashboardFinanceiro() {
     porProjeto,
   }
 }
+
+// ─── Resultado detalhado por obra ──────────────────────────────
+
+export async function getResultadoObra(projetoId: string) {
+  const admin = adminClient()
+
+  // Projeto + proposta vinculada
+  const { data: projeto } = await admin
+    .from('projetos_diario')
+    .select('id, nome, proposal_id, proposals(id, title, value, status, leads(id, name, phone))')
+    .eq('id', projetoId)
+    .single()
+
+  if (!projeto) return null
+
+  // Lançamentos da obra
+  const { data: lancamentos } = await admin
+    .from('lancamentos_financeiros')
+    .select('*, categorias_financeiras(id, nome, tipo, divisao), profiles(id, full_name)')
+    .eq('projeto_id', projetoId)
+    .order('data', { ascending: false })
+
+  const todos = (lancamentos ?? []) as any[]
+  const pagos = todos.filter((l: any) => l.status !== 'cancelado')
+
+  const receitas  = pagos.filter((l: any) => l.tipo === 'receita'  && l.status === 'pago').reduce((s: number, l: any) => s + Number(l.valor), 0)
+  const despesas  = pagos.filter((l: any) => l.tipo === 'despesa'  && l.status === 'pago').reduce((s: number, l: any) => s + Number(l.valor), 0)
+  const aReceber  = pagos.filter((l: any) => l.tipo === 'receita'  && l.status === 'pendente').reduce((s: number, l: any) => s + Number(l.valor), 0)
+  const aPagar    = pagos.filter((l: any) => l.tipo === 'despesa'  && l.status === 'pendente').reduce((s: number, l: any) => s + Number(l.valor), 0)
+
+  const valorOrcado = Number((projeto as any).proposals?.value ?? 0)
+  const resultado   = receitas - despesas
+  const margem      = receitas > 0 ? (resultado / receitas) * 100 : 0
+  const desvio      = receitas - valorOrcado
+  const desvioPerc  = valorOrcado > 0 ? (desvio / valorOrcado) * 100 : 0
+
+  return {
+    projeto: projeto as any,
+    valorOrcado,
+    receitas,
+    despesas,
+    resultado,
+    margem,
+    desvio,
+    desvioPerc,
+    aReceber,
+    aPagar,
+    lancamentos: todos,
+  }
+}
+
+// ─── Projetos disponíveis para lançamentos ────────────────────
+
+export async function getProjetosParaLancamento() {
+  const admin = adminClient()
+  const { data } = await admin
+    .from('projetos_diario')
+    .select('id, nome, proposals(id, title, value, status)')
+    .order('created_at', { ascending: false })
+  return (data ?? []) as any[]
+}

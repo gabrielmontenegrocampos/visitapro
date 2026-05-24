@@ -1,15 +1,22 @@
 'use client'
 
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { X, AlertCircle } from 'lucide-react'
 import type { CategoriaFinanceira } from '@/types/database'
 import { createLancamento, updateLancamento } from '@/app/(crm)/financeiro/actions'
 
+interface Projeto {
+  id: string
+  nome: string
+  proposals?: { value: number; title: string } | null
+}
+
 interface Props {
   categorias: CategoriaFinanceira[]
-  projetos: { id: string; nome: string }[]
+  projetos: Projeto[]
   onClose: () => void
   onSaved: () => void
+  projetoIdFixo?: string   // quando aberto de dentro de uma obra
   initial?: {
     id: string
     categoria_id: string
@@ -24,24 +31,33 @@ interface Props {
   }
 }
 
-export default function LancamentoModal({ categorias, projetos, onClose, onSaved, initial }: Props) {
+export default function LancamentoModal({ categorias, projetos, onClose, onSaved, initial, projetoIdFixo }: Props) {
   const [tipo, setTipo] = useState<'receita' | 'despesa'>(initial?.tipo ?? 'despesa')
-  const [divisao, setDivisao] = useState<'administracao' | 'obra'>(initial?.divisao ?? 'administracao')
+  const [divisao, setDivisao] = useState<'administracao' | 'obra'>(
+    projetoIdFixo ? 'obra' : (initial?.divisao ?? 'administracao')
+  )
   const [categoriaId, setCategoriaId] = useState(initial?.categoria_id ?? '')
   const [descricao, setDescricao] = useState(initial?.descricao ?? '')
   const [valor, setValor] = useState(initial ? String(initial.valor) : '')
   const [data, setData] = useState(initial?.data ?? new Date().toISOString().split('T')[0])
   const [status, setStatus] = useState<'pendente' | 'pago' | 'cancelado'>(initial?.status ?? 'pago')
-  const [projetoId, setProjetoId] = useState(initial?.projeto_id ?? '')
+  const [projetoId, setProjetoId] = useState(projetoIdFixo ?? initial?.projeto_id ?? '')
   const [observacoes, setObservacoes] = useState(initial?.observacoes ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const categsFiltradas = categorias.filter(c => c.tipo === tipo && c.divisao === divisao)
 
+  // Projeto selecionado (para mostrar valor orçado)
+  const projetoSelecionado = projetos.find(p => p.id === projetoId)
+
   async function handleSave() {
     if (!categoriaId || !descricao.trim() || !valor || !data) {
       setError('Preencha todos os campos obrigatórios')
+      return
+    }
+    if (divisao === 'obra' && !projetoId) {
+      setError('Selecione a obra vinculada ao lançamento')
       return
     }
     setSaving(true)
@@ -95,64 +111,109 @@ export default function LancamentoModal({ categorias, projetos, onClose, onSaved
             </div>
           </div>
 
-          {/* Divisão */}
+          {/* Divisão (bloqueada se projetoIdFixo) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Divisão</label>
             <div className="grid grid-cols-2 gap-2">
               {(['administracao', 'obra'] as const).map(d => (
-                <button key={d} onClick={() => { setDivisao(d); setCategoriaId('') }}
+                <button key={d}
+                  disabled={!!projetoIdFixo}
+                  onClick={() => { setDivisao(d); setCategoriaId(''); if (d === 'administracao') setProjetoId('') }}
                   className={`py-2.5 rounded-xl text-sm font-medium border transition-colors ${
                     divisao === d ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                  }`}>
-                  {d === 'administracao' ? 'Administração' : 'Obra'}
+                  } disabled:opacity-60 disabled:cursor-not-allowed`}>
+                  {d === 'administracao' ? '🏢 Administração' : '👷 Obra'}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Projeto (só para obras) */}
-          {divisao === 'obra' && projetos.length > 0 && (
+          {/* Projeto (obrigatório para obra) */}
+          {divisao === 'obra' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Projeto (opcional)</label>
-              <select value={projetoId} onChange={e => setProjetoId(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">Selecionar projeto...</option>
-                {projetos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-              </select>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Obra vinculada <span className="text-red-500">*</span>
+              </label>
+              {projetoIdFixo ? (
+                // Projeto fixo (aberto de dentro da obra)
+                <div className="w-full border border-blue-200 bg-blue-50 rounded-xl px-3 py-2.5 text-sm text-blue-800 font-medium">
+                  👷 {projetoSelecionado?.nome}
+                  {projetoSelecionado?.proposals?.value && (
+                    <span className="ml-2 text-xs text-blue-500 font-normal">
+                      Orçado: {projetoSelecionado.proposals.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <select value={projetoId} onChange={e => setProjetoId(e.target.value)}
+                    className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      !projetoId ? 'border-amber-300' : 'border-gray-200'
+                    }`}>
+                    <option value="">Selecionar obra...</option>
+                    {projetos.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.nome}{p.proposals?.value ? ` — orçado: ${p.proposals.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {!projetoId && (
+                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                      <AlertCircle size={11} /> Obrigatório para rastrear custo por obra
+                    </p>
+                  )}
+                  {projetos.length === 0 && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Nenhuma obra encontrada. <a href="/diario-obra" className="text-blue-600 underline">Criar obra</a>
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           )}
 
           {/* Categoria */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Categoria *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Categoria <span className="text-red-500">*</span>
+            </label>
             <select value={categoriaId} onChange={e => setCategoriaId(e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">Selecionar categoria...</option>
               {categsFiltradas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
             {categsFiltradas.length === 0 && (
-              <p className="text-xs text-amber-600 mt-1">Nenhuma categoria para {tipo} / {divisao === 'administracao' ? 'administração' : 'obra'}. <a href="/financeiro/categorias" className="underline">Criar categoria</a></p>
+              <p className="text-xs text-amber-600 mt-1">
+                Nenhuma categoria para {tipo}/{divisao === 'administracao' ? 'administração' : 'obra'}.{' '}
+                <a href="/financeiro/categorias" className="underline">Criar categoria</a>
+              </p>
             )}
           </div>
 
           {/* Descrição */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Descrição *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Descrição <span className="text-red-500">*</span>
+            </label>
             <input type="text" value={descricao} onChange={e => setDescricao(e.target.value)}
-              placeholder="Ex: Pagamento fornecedor X"
+              placeholder="Ex: Pagamento fornecedor, Medição parcial..."
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
           {/* Valor + Data */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Valor (R$) *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Valor (R$) <span className="text-red-500">*</span>
+              </label>
               <input type="number" min="0" step="0.01" value={valor} onChange={e => setValor(e.target.value)}
                 placeholder="0,00"
                 className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Data *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Data <span className="text-red-500">*</span>
+              </label>
               <input type="date" value={data} onChange={e => setData(e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
@@ -163,9 +224,9 @@ export default function LancamentoModal({ categorias, projetos, onClose, onSaved
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Status</label>
             <div className="grid grid-cols-3 gap-2">
               {([
-                { v: 'pago', label: 'Pago', cls: 'bg-green-600 text-white border-green-600' },
-                { v: 'pendente', label: 'Pendente', cls: 'bg-amber-500 text-white border-amber-500' },
-                { v: 'cancelado', label: 'Cancelado', cls: 'bg-gray-500 text-white border-gray-500' },
+                { v: 'pago',      label: 'Pago',      cls: 'bg-green-600 text-white border-green-600' },
+                { v: 'pendente',  label: 'Pendente',  cls: 'bg-amber-500 text-white border-amber-500' },
+                { v: 'cancelado', label: 'Cancelado', cls: 'bg-gray-500 text-white border-gray-500'  },
               ] as const).map(s => (
                 <button key={s.v} onClick={() => setStatus(s.v)}
                   className={`py-2 rounded-xl text-sm font-medium border transition-colors ${
@@ -186,7 +247,9 @@ export default function LancamentoModal({ categorias, projetos, onClose, onSaved
           </div>
 
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg flex items-center gap-1.5">
+              <AlertCircle size={14} />{error}
+            </p>
           )}
         </div>
 
