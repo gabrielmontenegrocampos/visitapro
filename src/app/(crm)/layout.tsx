@@ -18,8 +18,8 @@ export default async function CRMLayout({ children }: { children: React.ReactNod
     .eq('id', user.id)
     .single()
 
-  // Bloquear usuário inativo
-  if (!profile?.active) {
+  // Bloquear usuário inativo (só bloqueia se explicitamente false)
+  if (profile?.active === false) {
     await supabase.auth.signOut()
     redirect('/login?error=inativo')
   }
