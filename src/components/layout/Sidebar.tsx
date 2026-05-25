@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, KanbanSquare, Calendar,
   Users, FileText, UserCircle, MapPin, PanelLeftOpen, PanelLeftClose,
-  Settings, BookOpen, DollarSign,
+  Settings, BookOpen, DollarSign, ShoppingCart,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { canAccessRoute } from '@/lib/roles'
@@ -18,6 +18,7 @@ const ALL_NAV_ITEMS = [
   { href: '/leads',       label: 'Leads',          icon: Users           },
   { href: '/propostas',   label: 'Propostas',      icon: FileText        },
   { href: '/diario-obra', label: 'Diário de Obra', icon: BookOpen        },
+  { href: '/compras',     label: 'Compras',        icon: ShoppingCart    },
   { href: '/financeiro',  label: 'Financeiro',     icon: DollarSign      },
   { href: '/equipe',      label: 'Equipe',         icon: UserCircle      },
 ]

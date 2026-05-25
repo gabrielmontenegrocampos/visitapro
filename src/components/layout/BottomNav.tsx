@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, KanbanSquare, Calendar,
-  Users, FileText, BookOpen, DollarSign, UserCircle, Settings,
+  Users, FileText, BookOpen, DollarSign, UserCircle, Settings, ShoppingCart,
 } from 'lucide-react'
 import { canAccessRoute } from '@/lib/roles'
 
@@ -15,6 +15,7 @@ const ALL_ITEMS = [
   { href: '/leads',       label: 'Leads',     icon: Users           },
   { href: '/propostas',   label: 'Propostas', icon: FileText        },
   { href: '/diario-obra', label: 'Diário',    icon: BookOpen        },
+  { href: '/compras',     label: 'Compras',   icon: ShoppingCart    },
   { href: '/financeiro',  label: 'Financeiro',icon: DollarSign      },
   { href: '/equipe',      label: 'Equipe',    icon: UserCircle      },
   { href: '/configuracoes',label: 'Config.',  icon: Settings        },

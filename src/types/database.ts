@@ -299,3 +299,67 @@ export type VisitWithLead = Visit & {
   leads: Pick<Lead, 'id' | 'name' | 'phone' | 'address'> | null
   profiles: Pick<Profile, 'id' | 'full_name' | 'avatar_url'> | null
 }
+
+export type FornecedorCategoria = 'material' | 'equipamento' | 'servico' | 'subempreiteiro'
+export type OrdemStatus = 'solicitado' | 'aprovado' | 'recebido' | 'cancelado'
+
+export type Fornecedor = {
+  id: string
+  nome: string
+  nome_fantasia: string | null
+  cnpj_cpf: string | null
+  categoria: FornecedorCategoria
+  responsavel: string | null
+  telefone: string | null
+  email: string | null
+  site: string | null
+  cep: string | null
+  endereco: string | null
+  numero: string | null
+  complemento: string | null
+  bairro: string | null
+  cidade: string | null
+  estado: string | null
+  forma_pagamento: string | null
+  prazo_pagamento: string | null
+  pix: string | null
+  observacoes: string | null
+  ativo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type ItemOrdemCompra = {
+  id: string
+  ordem_id: string
+  descricao: string
+  quantidade: number
+  unidade: string | null
+  valor_unitario: number
+  valor_total: number
+  created_at: string
+}
+
+export type OrdemCompra = {
+  id: string
+  fornecedor_id: string | null
+  projeto_id: string | null
+  descricao: string
+  status: OrdemStatus
+  data_pedido: string
+  data_entrega_prevista: string | null
+  data_recebimento: string | null
+  forma_pagamento: string | null
+  observacoes: string | null
+  created_by: string | null
+  lancamento_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type OrdemCompraWithRelations = OrdemCompra & {
+  fornecedores: { id: string; nome: string } | null
+  projetos_diario: { id: string; nome: string } | null
+  itens_ordem_compra: ItemOrdemCompra[]
+  total: number
+}

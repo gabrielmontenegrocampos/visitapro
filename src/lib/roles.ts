@@ -31,6 +31,7 @@ const P = {
   financeiro_view:   ['admin', 'gerente', 'financeiro'],
   financeiro_edit:   ['admin', 'gerente', 'financeiro'],
   equipe:            ['admin'],
+  compras:           ['admin', 'gerente', 'financeiro', 'encarregado'],
   configuracoes_view:['admin', 'gerente'],
   configuracoes_edit:['admin'],
 } as const
@@ -48,6 +49,7 @@ export function canAccessRoute(role: string, href: string): boolean {
     '/propostas':     'propostas_view',
     '/diario-obra':   'diario_view',
     '/financeiro':    'financeiro_view',
+    '/compras':       'compras',
     '/equipe':        'equipe',
     '/vendedores':    'equipe',
     '/configuracoes': 'configuracoes_view',
