@@ -79,7 +79,6 @@ export async function getOrdensCompra() {
     .select(`
       *,
       fornecedores(id, nome),
-      projetos_diario(id, nome),
       itens_ordem_compra(*)
     `)
     .order('created_at', { ascending: false })
@@ -127,12 +126,21 @@ export async function createOrdemCompra(input: {
 
   const { data: ordemCompleta } = await admin
     .from('ordens_compra')
-    .select('*, fornecedores(id, nome), projetos_diario(id, nome), itens_ordem_compra(*)')
+    .select('*, fornecedores(id, nome), itens_ordem_compra(*)')
     .eq('id', ordem.id)
     .single()
 
   revalidatePath('/compras')
-  return { data: ordemCompleta, error: null }
+  return {
+    data: ordemCompleta
+      ? {
+          ...ordemCompleta,
+          projetos_diario: null, // enriquecido no cliente via prop projetos
+          total: (ordemCompleta.itens_ordem_compra ?? []).reduce((s: number, i: any) => s + Number(i.valor_total ?? 0), 0),
+        }
+      : null,
+    error: null,
+  }
 }
 
 export async function updateOrdemStatus(id: string, status: string, data_recebimento?: string) {
@@ -145,7 +153,7 @@ export async function updateOrdemStatus(id: string, status: string, data_recebim
     .from('ordens_compra')
     .update(updateData)
     .eq('id', id)
-    .select(`*, fornecedores(nome), projetos_diario(id, nome), itens_ordem_compra(*)`)
+    .select(`*, fornecedores(nome), itens_ordem_compra(*)`)
     .single()
 
   if (error) return { error: error.message }

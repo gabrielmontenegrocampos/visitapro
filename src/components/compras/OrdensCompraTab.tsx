@@ -31,8 +31,18 @@ interface Props {
   projetos: { id: string; nome: string }[]
 }
 
+function enriquecerOrdem(o: any, projetos: { id: string; nome: string }[]) {
+  if (!o) return o
+  return {
+    ...o,
+    projetos_diario: o.projeto_id
+      ? (projetos.find(p => p.id === o.projeto_id) ?? null)
+      : null,
+  }
+}
+
 export default function OrdensCompraTab({ ordens: initial, fornecedores, projetos }: Props) {
-  const [ordens, setOrdens] = useState(initial)
+  const [ordens, setOrdens] = useState(() => initial.map(o => enriquecerOrdem(o, projetos)))
   const [showModal, setShowModal] = useState(false)
   const [filterStatus, setFilterStatus] = useState('todos')
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -274,7 +284,7 @@ export default function OrdensCompraTab({ ordens: initial, fornecedores, projeto
           projetos={projetos}
           onClose={() => setShowModal(false)}
           onSaved={nova => {
-            setOrdens(prev => [nova, ...prev])
+            if (nova) setOrdens(prev => [enriquecerOrdem(nova, projetos), ...prev])
             setShowModal(false)
           }}
         />
