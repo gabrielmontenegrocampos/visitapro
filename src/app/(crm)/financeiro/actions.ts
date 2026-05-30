@@ -83,8 +83,7 @@ export async function getLancamentos(filters?: {
     .from('lancamentos_financeiros')
     .select(`
       *,
-      categorias_financeiras(id, nome, tipo, divisao),
-      projetos_diario(id, nome)
+      categorias_financeiras(id, nome, tipo, divisao)
     `)
     .order('data', { ascending: false })
     .order('created_at', { ascending: false })

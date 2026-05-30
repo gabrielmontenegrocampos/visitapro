@@ -53,7 +53,22 @@ interface Props {
 
 export default function FinanceiroClient({ dashboard, categorias: initialCats, projetos, lancamentos: initialLanc, canEdit }: Props) {
   const [activeTab, setActiveTab] = useState<'resumo' | 'lancamentos' | 'categorias'>('resumo')
-  const [lancamentos, setLancamentos] = useState(initialLanc)
+
+  // Enriquece lancamentos com projetos_diario via lookup local (evita join FK no PostgREST)
+  const projetoMap = useMemo(() => {
+    const m: Record<string, { id: string; nome: string }> = {}
+    projetos.forEach(p => { m[p.id] = { id: p.id, nome: p.nome } })
+    return m
+  }, [projetos])
+
+  const lancamentosEnriquecidos = useMemo(() =>
+    initialLanc.map(l => ({
+      ...l,
+      projetos_diario: l.projeto_id ? (projetoMap[l.projeto_id] ?? null) : null,
+    })),
+  [initialLanc, projetoMap])
+
+  const [lancamentos, setLancamentos] = useState(lancamentosEnriquecidos)
   const [categorias, setCategorias] = useState(initialCats)
 
   // Modal lançamento
@@ -121,7 +136,7 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
     const newStatus = l.status === 'pago' ? 'pendente' : 'pago'
     setTogglingId(l.id)
     await updateLancamentoStatus(l.id, newStatus)
-    setLancamentos(prev => prev.map(x => x.id === l.id ? { ...x, status: newStatus } : x))
+    setLancamentos(prev => prev.map(x => x.id === l.id ? { ...x, status: newStatus as typeof newStatus } : x))
     setTogglingId(null)
   }
 
