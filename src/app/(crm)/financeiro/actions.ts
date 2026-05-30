@@ -346,6 +346,16 @@ export async function getResultadoObra(projetoId: string) {
   }
 }
 
+export async function updateLancamentoStatus(id: string, status: 'pendente' | 'pago' | 'cancelado') {
+  const admin = adminClient()
+  const { error } = await admin
+    .from('lancamentos_financeiros')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  revalidatePath('/financeiro')
+  return { error: error?.message }
+}
+
 // ─── Projetos disponíveis para lançamentos ────────────────────
 
 export async function getProjetosParaLancamento() {
