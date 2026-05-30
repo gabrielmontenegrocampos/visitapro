@@ -65,7 +65,7 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
   const [togglingId, setTogglingId] = useState<string | null>(null)
 
   // Filtros lançamentos
-  const [filtroMes, setFiltroMes] = useState(() => new Date().toISOString().slice(0, 7))
+  const [filtroMes, setFiltroMes] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
   const [filtroDivisao, setFiltroDivisao] = useState('')
   const [filtroStatus, setFiltroStatus] = useState('')
@@ -273,7 +273,11 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
                   </div>
                 </div>
                 <button
-                  onClick={() => { setFiltroDivisao(card.link.includes('obra') ? 'obra' : 'administracao'); setActiveTab('lancamentos') }}
+                  onClick={() => {
+                    setFiltroDivisao(card.link.includes('obra') ? 'obra' : 'administracao')
+                    setFiltroMes('')
+                    setActiveTab('lancamentos')
+                  }}
                   className="mt-3 block w-full text-xs text-blue-600 hover:underline text-center"
                 >
                   Ver lançamentos →
@@ -345,6 +349,20 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
         <div className="space-y-4">
           {/* Seletor de mês — pills horizontais */}
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {/* Pill "Todos" */}
+            <button
+              onClick={() => setFiltroMes('')}
+              className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-medium transition-all border ${
+                filtroMes === ''
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="font-semibold">Todos</div>
+              <div className={`text-[10px] mt-0.5 ${filtroMes === '' ? 'text-blue-100' : 'text-gray-400'}`}>
+                {lancamentos.length} registros
+              </div>
+            </button>
             {mesesDisponiveis.map(mes => {
               const r = lancamentos.filter(l => l.data.startsWith(mes) && l.tipo === 'receita' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
               const d = lancamentos.filter(l => l.data.startsWith(mes) && l.tipo === 'despesa' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
