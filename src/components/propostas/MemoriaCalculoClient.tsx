@@ -592,7 +592,10 @@ export default function MemoriaCalculoClient({
             {bdiItems.map(b => (
               <div key={b.id} className={`flex items-center gap-3 px-4 py-3 transition-opacity ${deletingBdi === b.id ? 'opacity-40' : ''}`}>
                 <span className="flex-1 text-sm text-gray-700 font-medium">{b.label}</span>
-                <span className="font-bold text-purple-700 text-sm w-16 text-right">{b.percentage.toFixed(1)}%</span>
+                <div className="text-right shrink-0">
+                  <span className="font-bold text-purple-700 text-sm">{b.percentage.toFixed(1)}%</span>
+                  <p className="text-xs text-gray-400 mt-0.5">{formatCurrency(directCost * (b.percentage / 100))}</p>
+                </div>
                 <button onClick={() => openBdiEdit(b)} className="p-1.5 hover:bg-gray-100 rounded-lg">
                   <Pencil className="w-3.5 h-3.5 text-gray-400" />
                 </button>
