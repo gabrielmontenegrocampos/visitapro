@@ -4,13 +4,13 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import {
   TrendingUp, TrendingDown, Wallet, Clock,
-  ArrowUpRight, ArrowDownRight, Plus, Tag,
+  ArrowUpRight, ArrowDownRight, Plus,
   Building2, HardHat, CheckCircle2, RefreshCw,
-  Pencil, Trash2, X, ChevronRight, Filter,
+  Pencil, Trash2, X, ChevronRight, Filter, CheckSquare,
 } from 'lucide-react'
 import type { CategoriaFinanceira } from '@/types/database'
 import LancamentoModal from './LancamentoModal'
-import { deleteLancamento, deleteLancamentoEProximos, cancelarRecorrencia, updateLancamentoStatus, createCategoria, updateCategoria, deleteCategoria } from '@/app/(crm)/financeiro/actions'
+import { deleteLancamento, deleteLancamentoEProximos, cancelarRecorrencia, updateLancamentoStatus, updateLancamentosStatusBulk, createCategoria, updateCategoria, deleteCategoria } from '@/app/(crm)/financeiro/actions'
 
 function fmt(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -79,6 +79,10 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
   const [cancelRecorrTarget, setCancelRecorrTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [togglingId, setTogglingId] = useState<string | null>(null)
+
+  // Seleção em massa
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
+  const [bulkLoading, setBulkLoading] = useState(false)
 
   // Filtros lançamentos
   const [filtroMes, setFiltroMes] = useState('')
@@ -171,6 +175,34 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
   function handleSaved() {
     setShowModal(false); setEditTarget(null)
     window.location.reload()
+  }
+
+  function toggleSelecionado(id: string) {
+    setSelecionados(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelecionarTodos() {
+    if (selecionados.size === filtered.length) {
+      setSelecionados(new Set())
+    } else {
+      setSelecionados(new Set(filtered.map(l => l.id)))
+    }
+  }
+
+  async function handleBulkStatus(status: 'pago' | 'pendente' | 'cancelado') {
+    if (selecionados.size === 0) return
+    setBulkLoading(true)
+    const ids = Array.from(selecionados)
+    await updateLancamentosStatusBulk(ids, status)
+    setLancamentos(prev => prev.map(l =>
+      selecionados.has(l.id) ? { ...l, status } : l
+    ))
+    setSelecionados(new Set())
+    setBulkLoading(false)
   }
 
   // Categorias
@@ -434,6 +466,16 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
 
           {/* Filtros adicionais */}
           <div className="bg-white rounded-xl border border-gray-100 p-3 flex flex-wrap gap-2 items-center">
+            {/* Checkbox selecionar todos */}
+            {filtered.length > 0 && canEdit && (
+              <label className="flex items-center gap-1.5 mr-1 cursor-pointer" title="Selecionar todos">
+                <input type="checkbox"
+                  checked={selecionados.size === filtered.length && filtered.length > 0}
+                  onChange={toggleSelecionarTodos}
+                  className="w-3.5 h-3.5 accent-blue-600 cursor-pointer" />
+                <span className="text-xs text-gray-400">Todos</span>
+              </label>
+            )}
             <Filter size={13} className="text-gray-400 shrink-0" />
             <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}
               className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white">
@@ -462,6 +504,31 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
             )}
             <span className="ml-auto text-xs text-gray-400">{filtered.length} lançamento{filtered.length !== 1 ? 's' : ''}</span>
           </div>
+
+          {/* Barra de ações em massa */}
+          {selecionados.size > 0 && (
+            <div className="flex items-center gap-3 bg-blue-600 text-white rounded-xl px-4 py-3 shadow-lg flex-wrap">
+              <CheckSquare size={16} className="shrink-0" />
+              <span className="text-sm font-medium flex-1">
+                {selecionados.size} selecionado{selecionados.size !== 1 ? 's' : ''}
+              </span>
+              <span className="text-xs text-blue-200">Alterar status:</span>
+              {([
+                { s: 'pago'      as const, label: 'Pago',      cls: 'bg-green-500 hover:bg-green-400' },
+                { s: 'pendente'  as const, label: 'Pendente',  cls: 'bg-amber-500 hover:bg-amber-400' },
+                { s: 'cancelado' as const, label: 'Cancelado', cls: 'bg-gray-500 hover:bg-gray-400'   },
+              ]).map(({ s, label, cls }) => (
+                <button key={s} onClick={() => handleBulkStatus(s)} disabled={bulkLoading}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors disabled:opacity-50 ${cls}`}>
+                  {bulkLoading ? '...' : label}
+                </button>
+              ))}
+              <button onClick={() => setSelecionados(new Set())}
+                className="p-1.5 rounded-lg hover:bg-blue-500 transition-colors" title="Limpar seleção">
+                <X size={14} />
+              </button>
+            </div>
+          )}
 
           {/* Lista agrupada por data */}
           <div className="space-y-3">
@@ -515,7 +582,14 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
                 {/* Itens do grupo */}
                 <div className="divide-y divide-gray-50">
                   {itens.map(l => (
-                    <div key={l.id} className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50 ${l.status === 'cancelado' ? 'opacity-40' : ''}`}>
+                    <div key={l.id} className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50 ${l.status === 'cancelado' ? 'opacity-40' : ''} ${selecionados.has(l.id) ? 'bg-blue-50' : ''}`}>
+                      {/* Checkbox seleção */}
+                      {canEdit && (
+                        <input type="checkbox"
+                          checked={selecionados.has(l.id)}
+                          onChange={() => toggleSelecionado(l.id)}
+                          className="w-3.5 h-3.5 accent-blue-600 shrink-0 cursor-pointer" />
+                      )}
                       {/* Ícone tipo */}
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${l.tipo === 'receita' ? 'bg-green-50' : 'bg-red-50'}`}>
                         {l.tipo === 'receita'

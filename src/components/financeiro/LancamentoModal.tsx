@@ -64,7 +64,7 @@ export default function LancamentoModal({ categorias, projetos, onClose, onSaved
     }
     setSaving(true)
     setError(null)
-    const payload = {
+    const basePayload = {
       categoria_id: categoriaId,
       tipo,
       divisao,
@@ -74,12 +74,10 @@ export default function LancamentoModal({ categorias, projetos, onClose, onSaved
       status,
       projeto_id: divisao === 'obra' && projetoId ? projetoId : null,
       observacoes: observacoes.trim() || null,
-      recorrente: !initial && recorrente,
-      recorrenciaMeses: !initial && recorrente ? recorrenciaMeses : undefined,
     }
     const res = initial
-      ? await updateLancamento(initial.id, payload)
-      : await createLancamento(payload)
+      ? await updateLancamento(initial.id, basePayload)
+      : await createLancamento({ ...basePayload, recorrente, recorrenciaMeses: recorrente ? recorrenciaMeses : undefined })
     setSaving(false)
     if (res.error) { setError(res.error); return }
     onSaved()

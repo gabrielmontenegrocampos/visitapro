@@ -360,6 +360,16 @@ export async function getResultadoObra(projetoId: string) {
   }
 }
 
+export async function updateLancamentosStatusBulk(ids: string[], status: 'pendente' | 'pago' | 'cancelado') {
+  const admin = adminClient()
+  const { error } = await admin
+    .from('lancamentos_financeiros')
+    .update({ status, updated_at: new Date().toISOString() })
+    .in('id', ids)
+  revalidatePath('/financeiro')
+  return { error: error?.message }
+}
+
 export async function updateLancamentoStatus(id: string, status: 'pendente' | 'pago' | 'cancelado') {
   const admin = adminClient()
   const { error } = await admin
