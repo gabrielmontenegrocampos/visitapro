@@ -89,6 +89,8 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
   const [filtroTipo, setFiltroTipo] = useState('')
   const [filtroDivisao, setFiltroDivisao] = useState('')
   const [filtroStatus, setFiltroStatus] = useState('')
+  const [filtroDataInicio, setFiltroDataInicio] = useState('')
+  const [filtroDataFim, setFiltroDataFim] = useState('')
 
   // Modal categoria
   const [showCatModal, setShowCatModal] = useState(false)
@@ -116,9 +118,11 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
       if (filtroTipo && l.tipo !== filtroTipo) return false
       if (filtroDivisao && l.divisao !== filtroDivisao) return false
       if (filtroStatus && l.status !== filtroStatus) return false
+      if (filtroDataInicio && l.data < filtroDataInicio) return false
+      if (filtroDataFim && l.data > filtroDataFim) return false
       return true
     })
-  }, [lancamentos, filtroMes, filtroTipo, filtroDivisao, filtroStatus])
+  }, [lancamentos, filtroMes, filtroTipo, filtroDivisao, filtroStatus, filtroDataInicio, filtroDataFim])
 
   // Totais do mês filtrado
   const totalReceitas = filtered.filter(l => l.tipo === 'receita' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
@@ -410,7 +414,7 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
             {/* Pill "Todos" */}
             <button
-              onClick={() => setFiltroMes('')}
+              onClick={() => { setFiltroMes(''); setFiltroDataInicio(''); setFiltroDataFim('') }}
               className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-medium transition-all border ${
                 filtroMes === ''
                   ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
@@ -430,7 +434,7 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
               return (
                 <button
                   key={mes}
-                  onClick={() => setFiltroMes(mes)}
+                  onClick={() => { setFiltroMes(mes); setFiltroDataInicio(''); setFiltroDataFim('') }}
                   className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-medium transition-all border ${
                     filtroMes === mes
                       ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
@@ -496,8 +500,32 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
               <option value="pendente">Pendente</option>
               <option value="cancelado">Cancelado</option>
             </select>
-            {(filtroTipo || filtroDivisao || filtroStatus) && (
-              <button onClick={() => { setFiltroTipo(''); setFiltroDivisao(''); setFiltroStatus('') }}
+
+            {/* Separador */}
+            <div className="w-px h-5 bg-gray-200 shrink-0" />
+
+            {/* Datas */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400 shrink-0">De</span>
+              <input
+                type="date"
+                value={filtroDataInicio}
+                onChange={e => { setFiltroDataInicio(e.target.value); setFiltroMes('') }}
+                className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400 shrink-0">até</span>
+              <input
+                type="date"
+                value={filtroDataFim}
+                onChange={e => { setFiltroDataFim(e.target.value); setFiltroMes('') }}
+                className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+              />
+            </div>
+
+            {(filtroTipo || filtroDivisao || filtroStatus || filtroDataInicio || filtroDataFim) && (
+              <button onClick={() => { setFiltroTipo(''); setFiltroDivisao(''); setFiltroStatus(''); setFiltroDataInicio(''); setFiltroDataFim('') }}
                 className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1">
                 <X size={11} /> Limpar filtros
               </button>
