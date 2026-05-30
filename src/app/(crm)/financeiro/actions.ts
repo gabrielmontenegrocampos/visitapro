@@ -84,8 +84,7 @@ export async function getLancamentos(filters?: {
     .select(`
       *,
       categorias_financeiras(id, nome, tipo, divisao),
-      projetos_diario(id, nome),
-      profiles(id, full_name)
+      projetos_diario(id, nome)
     `)
     .order('data', { ascending: false })
     .order('created_at', { ascending: false })
@@ -314,7 +313,7 @@ export async function getResultadoObra(projetoId: string) {
   // Lançamentos da obra
   const { data: lancamentos } = await admin
     .from('lancamentos_financeiros')
-    .select('*, categorias_financeiras(id, nome, tipo, divisao), profiles(id, full_name)')
+    .select('*, categorias_financeiras(id, nome, tipo, divisao), profiles!created_by(id, full_name)')
     .eq('projeto_id', projetoId)
     .order('data', { ascending: false })
 
