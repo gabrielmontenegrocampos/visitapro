@@ -92,7 +92,7 @@ const BDI_SUGGESTIONS = [
   'Imposto (ISS)', 'Imposto (PIS/COFINS)', 'Seguro', 'Margem de lucro',
   'Administração central', 'Garantia', 'Risco',
 ]
-const UNITS_SERVICE  = ['m²', 'm', 'ml']
+const UNITS_SERVICE  = ['m²', 'm linear', 'm', 'un', 'dia', 'hora', 'andar', 'cômodo', 'vb', 'ml']
 const UNITS_MATERIAL = ['un', 'lata', 'saco', 'kg', 'L', 'm²', 'm', 'rolo', 'caixa']
 const UNITS_EQUIP    = ['dia', 'semana', 'mês', 'un', 'hora']
 
@@ -1110,14 +1110,15 @@ export default function MemoriaCalculoClient({
                   {/* Unidade */}
                   <div>
                     <label className="label">Unidade de medida</label>
-                    <div className="flex gap-2">
+                    <select
+                      value={svcUnit}
+                      onChange={e => setSvcUnit(e.target.value)}
+                      className="input bg-white"
+                    >
                       {UNITS_SERVICE.map(u => (
-                        <button key={u} onClick={() => setSvcUnit(u)}
-                          className={`flex-1 py-2 rounded-xl text-sm font-semibold border-2 transition-all ${svcUnit === u ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
-                          {u}
-                        </button>
+                        <option key={u} value={u}>{u}</option>
                       ))}
-                    </div>
+                    </select>
                   </div>
 
                   {/* Medições */}
