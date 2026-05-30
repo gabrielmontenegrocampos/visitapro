@@ -220,3 +220,13 @@ export async function deleteOrdemCompra(id: string) {
   revalidatePath('/compras')
   return { error: error?.message }
 }
+
+export async function updateOrdensStatusBulk(ids: string[], status: string) {
+  const admin = adminClient()
+  const { error } = await admin
+    .from('ordens_compra')
+    .update({ status, updated_at: new Date().toISOString() })
+    .in('id', ids)
+  revalidatePath('/compras')
+  return { error: error?.message }
+}
