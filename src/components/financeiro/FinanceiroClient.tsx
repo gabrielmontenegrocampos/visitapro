@@ -438,13 +438,28 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
 
           {/* Lista agrupada por data */}
           <div className="space-y-3">
-            {filtered.length === 0 && (
+            {filtered.length === 0 && lancamentos.length === 0 && (
+              <div className="bg-amber-50 rounded-2xl border border-amber-200 shadow-sm py-8 px-6 text-center">
+                <p className="text-amber-800 text-sm font-semibold mb-1">Nenhum lançamento encontrado no banco de dados</p>
+                <p className="text-amber-700 text-xs mb-4">
+                  Isso pode indicar que as tabelas do módulo financeiro ainda não foram criadas no Supabase.
+                  Execute a migração <strong>004_diario_financeiro_compras_equipe.sql</strong> no SQL Editor.
+                </p>
+                {canEdit && (
+                  <button onClick={() => { setEditTarget(null); setShowModal(true) }}
+                    className="mt-1 text-sm text-blue-600 hover:underline">
+                    Tentar criar um lançamento mesmo assim
+                  </button>
+                )}
+              </div>
+            )}
+            {filtered.length === 0 && lancamentos.length > 0 && (
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm py-12 text-center">
                 <p className="text-gray-400 text-sm">Nenhum lançamento neste período</p>
                 {canEdit && (
                   <button onClick={() => { setEditTarget(null); setShowModal(true) }}
                     className="mt-3 text-sm text-blue-600 hover:underline">
-                    Criar primeiro lançamento
+                    Criar novo lançamento
                   </button>
                 )}
               </div>

@@ -96,7 +96,8 @@ export async function getLancamentos(filters?: {
   if (filters?.dataInicio) q = q.gte('data', filters.dataInicio)
   if (filters?.dataFim) q = q.lte('data', filters.dataFim)
 
-  const { data } = await q
+  const { data, error } = await q
+  if (error) console.error('[getLancamentos] erro:', error.message, error.details)
   return data ?? []
 }
 

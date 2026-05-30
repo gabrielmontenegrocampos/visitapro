@@ -14,9 +14,18 @@ function adminClient() {
 
 export async function createProjeto(proposalId: string, tituloPub: string) {
   const admin = adminClient()
+
+  // Busca o título da proposta para popular o campo `nome` (usado em outros módulos)
+  const { data: proposal } = await admin
+    .from('proposals')
+    .select('title, leads(name)')
+    .eq('id', proposalId)
+    .single()
+  const nomeGerado = tituloPub || (proposal as any)?.leads?.name || (proposal as any)?.title || 'Projeto sem nome'
+
   const { data, error } = await admin
     .from('projetos_diario')
-    .insert({ proposal_id: proposalId, titulo_publico: tituloPub || null })
+    .insert({ proposal_id: proposalId, titulo_publico: tituloPub || null, nome: nomeGerado })
     .select()
     .single()
   if (error || !data) return { error: error?.message ?? 'Erro ao criar projeto' }
