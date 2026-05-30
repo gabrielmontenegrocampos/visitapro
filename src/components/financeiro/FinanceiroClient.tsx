@@ -26,11 +26,12 @@ const STATUS_LABEL: Record<string, string> = { pago: 'Pago', pendente: 'Pendente
 interface DashboardData {
   receitas: number; despesas: number; saldo: number
   aReceber: number; aPagar: number
-  meses: { mes: string; receitas: number; despesas: number }[]
+  receitasTotal: number; despesasTotal: number; saldoProjetado: number
+  meses: { mes: string; receitas: number; despesas: number; receitasPendente: number; despesasPendente: number }[]
   recentes: any[]
-  adm: { receitas: number; despesas: number; saldo: number }
-  obras: { receitas: number; despesas: number; saldo: number }
-  porProjeto: { id: string; nome: string; receitas: number; despesas: number; saldo: number }[]
+  adm: { receitas: number; receitasPendente: number; despesas: number; despesasPendente: number; saldo: number }
+  obras: { receitas: number; receitasPendente: number; despesas: number; despesasPendente: number; saldo: number }
+  porProjeto: { id: string; nome: string; receitas: number; despesas: number; saldo: number; aReceber: number; aPagar: number }[]
 }
 
 interface Lancamento {
@@ -237,7 +238,7 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
     setDeleteCat(null); setCatDeleting(false)
   }
 
-  const maxBar = Math.max(...dashboard.meses.map(m => Math.max(m.receitas, m.despesas)), 1)
+  const maxBar = Math.max(...dashboard.meses.map(m => Math.max(m.receitas + m.receitasPendente, m.despesas + m.despesasPendente)), 1)
 
   const tabs = [
     { key: 'resumo' as const,      label: 'Resumo' },
@@ -288,22 +289,63 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
         <div className="space-y-4">
           {/* KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              { label: 'Receitas pagas',  value: fmt(dashboard.receitas), icon: <TrendingUp size={18}/>,  color: 'text-green-600 bg-green-50' },
-              { label: 'Despesas pagas',  value: fmt(dashboard.despesas), icon: <TrendingDown size={18}/>, color: 'text-red-500 bg-red-50' },
-              { label: 'Saldo do período',value: fmt(dashboard.saldo),    icon: <Wallet size={18}/>,       color: dashboard.saldo >= 0 ? 'text-blue-600 bg-blue-50' : 'text-red-500 bg-red-50' },
-              { label: 'A receber',       value: fmt(dashboard.aReceber), icon: <Clock size={18}/>,        color: 'text-amber-600 bg-amber-50',
-                sub: dashboard.aPagar > 0 ? `A pagar: ${fmt(dashboard.aPagar)}` : undefined },
-            ].map(k => (
-              <div key={k.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-500 font-medium">{k.label}</span>
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${k.color}`}>{k.icon}</div>
-                </div>
-                <p className="text-xl font-bold text-gray-900">{k.value}</p>
-                {k.sub && <p className="text-xs text-gray-400 mt-1">{k.sub}</p>}
+            {/* Receitas */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-500 font-medium">Receitas</span>
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-green-600 bg-green-50"><TrendingUp size={18}/></div>
               </div>
-            ))}
+              <p className="text-xl font-bold text-green-600">{fmt(dashboard.receitasTotal)}</p>
+              <div className="mt-2 space-y-0.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Recebido</span>
+                  <span className="font-medium text-green-600">{fmt(dashboard.receitas)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">A receber</span>
+                  <span className="font-medium text-amber-500">{fmt(dashboard.aReceber)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Despesas */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-500 font-medium">Despesas</span>
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-red-500 bg-red-50"><TrendingDown size={18}/></div>
+              </div>
+              <p className="text-xl font-bold text-red-500">{fmt(dashboard.despesasTotal)}</p>
+              <div className="mt-2 space-y-0.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Pago</span>
+                  <span className="font-medium text-red-500">{fmt(dashboard.despesas)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">A pagar</span>
+                  <span className="font-medium text-amber-500">{fmt(dashboard.aPagar)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Saldo real */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-500 font-medium">Saldo real</span>
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${dashboard.saldo >= 0 ? 'text-blue-600 bg-blue-50' : 'text-red-500 bg-red-50'}`}><Wallet size={18}/></div>
+              </div>
+              <p className={`text-xl font-bold ${dashboard.saldo >= 0 ? 'text-blue-700' : 'text-red-600'}`}>{fmt(dashboard.saldo)}</p>
+              <p className="text-xs text-gray-400 mt-2">Recebido − Pago</p>
+            </div>
+
+            {/* Saldo projetado */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-500 font-medium">Saldo projetado</span>
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-amber-600 bg-amber-50`}><Clock size={18}/></div>
+              </div>
+              <p className={`text-xl font-bold ${dashboard.saldoProjetado >= 0 ? 'text-blue-700' : 'text-red-600'}`}>{fmt(dashboard.saldoProjetado)}</p>
+              <p className="text-xs text-gray-400 mt-2">Incluindo pendentes</p>
+            </div>
           </div>
 
           {/* Adm + Obras */}
@@ -320,18 +362,43 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
                     <p className="text-xs text-gray-400">{card.sub}</p>
                   </div>
                 </div>
-                <div className="space-y-1">
-                  {[
-                    { l: 'Receitas', v: card.data.receitas, c: 'text-green-600' },
-                    { l: 'Despesas', v: card.data.despesas, c: 'text-red-500' },
-                  ].map(row => (
-                    <div key={row.l} className="flex justify-between items-center py-1.5 border-b border-gray-50">
-                      <span className="text-sm text-gray-500">{row.l}</span>
-                      <span className={`text-sm font-semibold ${row.c}`}>{fmt(row.v)}</span>
+                <div className="space-y-0">
+                  {/* Receitas */}
+                  <div className="py-1.5 border-b border-gray-50">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Receitas</span>
+                      <span className="text-sm font-semibold text-green-600">{fmt(card.data.receitas + card.data.receitasPendente)}</span>
                     </div>
-                  ))}
+                    <div className="flex justify-between items-center mt-0.5">
+                      <span className="text-xs text-gray-400 pl-2">↳ Recebido</span>
+                      <span className="text-xs text-green-500">{fmt(card.data.receitas)}</span>
+                    </div>
+                    {card.data.receitasPendente > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-400 pl-2">↳ A receber</span>
+                        <span className="text-xs text-amber-500">{fmt(card.data.receitasPendente)}</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Despesas */}
+                  <div className="py-1.5 border-b border-gray-50">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">Despesas</span>
+                      <span className="text-sm font-semibold text-red-500">{fmt(card.data.despesas + card.data.despesasPendente)}</span>
+                    </div>
+                    <div className="flex justify-between items-center mt-0.5">
+                      <span className="text-xs text-gray-400 pl-2">↳ Pago</span>
+                      <span className="text-xs text-red-400">{fmt(card.data.despesas)}</span>
+                    </div>
+                    {card.data.despesasPendente > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-400 pl-2">↳ A pagar</span>
+                        <span className="text-xs text-amber-500">{fmt(card.data.despesasPendente)}</span>
+                      </div>
+                    )}
+                  </div>
                   <div className="flex justify-between items-center pt-2">
-                    <span className="text-sm font-medium text-gray-700">Saldo</span>
+                    <span className="text-sm font-medium text-gray-700">Saldo real</span>
                     <span className={`text-base font-bold ${card.data.saldo >= 0 ? 'text-blue-700' : 'text-red-600'}`}>{fmt(card.data.saldo)}</span>
                   </div>
                 </div>
@@ -370,9 +437,20 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
                       </p>
                     </div>
                     <div className="hidden sm:flex gap-4 text-right shrink-0">
-                      <div><p className="text-xs text-gray-400">Receitas</p><p className="text-sm font-semibold text-green-600">{fmt(p.receitas)}</p></div>
-                      <div><p className="text-xs text-gray-400">Despesas</p><p className="text-sm font-semibold text-red-500">{fmt(p.despesas)}</p></div>
-                      <div><p className="text-xs text-gray-400">Resultado</p><p className={`text-sm font-bold ${p.saldo >= 0 ? 'text-blue-700' : 'text-red-600'}`}>{fmt(p.saldo)}</p></div>
+                      <div>
+                        <p className="text-xs text-gray-400">Receitas</p>
+                        <p className="text-sm font-semibold text-green-600">{fmt(p.receitas)}</p>
+                        {p.aReceber > 0 && <p className="text-xs text-amber-500">+{fmt(p.aReceber)} prev.</p>}
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Despesas</p>
+                        <p className="text-sm font-semibold text-red-500">{fmt(p.despesas)}</p>
+                        {p.aPagar > 0 && <p className="text-xs text-amber-500">+{fmt(p.aPagar)} prev.</p>}
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Resultado</p>
+                        <p className={`text-sm font-bold ${p.saldo >= 0 ? 'text-blue-700' : 'text-red-600'}`}>{fmt(p.saldo)}</p>
+                      </div>
                     </div>
                     <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-400 shrink-0" />
                   </Link>
@@ -388,20 +466,30 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
               {dashboard.meses.map(m => (
                 <div key={m.mes} className="flex-1 flex flex-col items-center gap-1">
                   <div className="w-full flex gap-1 items-end" style={{ height: '120px' }}>
-                    <div className="flex-1 bg-green-400 rounded-t-md"
-                      style={{ height: `${(m.receitas / maxBar) * 100}%`, minHeight: m.receitas > 0 ? '4px' : '0' }}
-                      title={`Receitas: ${fmt(m.receitas)}`} />
-                    <div className="flex-1 bg-red-400 rounded-t-md"
-                      style={{ height: `${(m.despesas / maxBar) * 100}%`, minHeight: m.despesas > 0 ? '4px' : '0' }}
-                      title={`Despesas: ${fmt(m.despesas)}`} />
+                    {/* Receitas: parte paga (verde sólido) + pendente (verde claro) empilhadas */}
+                    <div className="flex-1 flex flex-col justify-end rounded-t-md overflow-hidden"
+                      style={{ height: `${((m.receitas + m.receitasPendente) / maxBar) * 100}%`, minHeight: (m.receitas + m.receitasPendente) > 0 ? '4px' : '0' }}>
+                      <div className="w-full bg-green-200" style={{ height: `${(m.receitas + m.receitasPendente) > 0 ? (m.receitasPendente / (m.receitas + m.receitasPendente)) * 100 : 0}%` }}
+                        title={`A receber: ${fmt(m.receitasPendente)}`} />
+                      <div className="w-full bg-green-500 flex-1" title={`Recebido: ${fmt(m.receitas)}`} />
+                    </div>
+                    {/* Despesas: parte paga (vermelho sólido) + pendente (vermelho claro) empilhadas */}
+                    <div className="flex-1 flex flex-col justify-end rounded-t-md overflow-hidden"
+                      style={{ height: `${((m.despesas + m.despesasPendente) / maxBar) * 100}%`, minHeight: (m.despesas + m.despesasPendente) > 0 ? '4px' : '0' }}>
+                      <div className="w-full bg-red-200" style={{ height: `${(m.despesas + m.despesasPendente) > 0 ? (m.despesasPendente / (m.despesas + m.despesasPendente)) * 100 : 0}%` }}
+                        title={`A pagar: ${fmt(m.despesasPendente)}`} />
+                      <div className="w-full bg-red-400 flex-1" title={`Pago: ${fmt(m.despesas)}`} />
+                    </div>
                   </div>
                   <span className="text-[10px] text-gray-400 capitalize">{m.mes}</span>
                 </div>
               ))}
             </div>
-            <div className="flex gap-4 mt-3">
-              <div className="flex items-center gap-1.5 text-xs text-gray-500"><div className="w-3 h-3 rounded-sm bg-green-400" /> Receitas</div>
-              <div className="flex items-center gap-1.5 text-xs text-gray-500"><div className="w-3 h-3 rounded-sm bg-red-400" /> Despesas</div>
+            <div className="flex flex-wrap gap-4 mt-3">
+              <div className="flex items-center gap-1.5 text-xs text-gray-500"><div className="w-3 h-3 rounded-sm bg-green-500" /> Receitas pagas</div>
+              <div className="flex items-center gap-1.5 text-xs text-gray-500"><div className="w-3 h-3 rounded-sm bg-green-200" /> A receber</div>
+              <div className="flex items-center gap-1.5 text-xs text-gray-500"><div className="w-3 h-3 rounded-sm bg-red-400" /> Despesas pagas</div>
+              <div className="flex items-center gap-1.5 text-xs text-gray-500"><div className="w-3 h-3 rounded-sm bg-red-200" /> A pagar</div>
             </div>
           </div>
         </div>

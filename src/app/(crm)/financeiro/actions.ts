@@ -238,28 +238,35 @@ export async function getDashboardFinanceiro() {
 
   const todos = lancamentos ?? []
 
-  // Totais gerais (pagos)
-  const receitas = todos.filter(l => l.tipo === 'receita' && l.status === 'pago')
-    .reduce((s, l) => s + Number(l.valor), 0)
-  const despesas = todos.filter(l => l.tipo === 'despesa' && l.status === 'pago')
-    .reduce((s, l) => s + Number(l.valor), 0)
-  const aReceber = todos.filter(l => l.tipo === 'receita' && l.status === 'pendente')
-    .reduce((s, l) => s + Number(l.valor), 0)
-  const aPagar = todos.filter(l => l.tipo === 'despesa' && l.status === 'pendente')
-    .reduce((s, l) => s + Number(l.valor), 0)
+  const sum = (arr: typeof todos) => arr.reduce((s, l) => s + Number(l.valor), 0)
 
-  // Split administração vs obra
-  const adm = todos.filter(l => l.divisao === 'administracao')
-  const admReceitas = adm.filter(l => l.tipo === 'receita' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
-  const admDespesas = adm.filter(l => l.tipo === 'despesa' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
+  // Totais por status
+  const receitasPagas    = sum(todos.filter(l => l.tipo === 'receita' && l.status === 'pago'))
+  const receitasPendente = sum(todos.filter(l => l.tipo === 'receita' && l.status === 'pendente'))
+  const despesasPagas    = sum(todos.filter(l => l.tipo === 'despesa' && l.status === 'pago'))
+  const despesasPendente = sum(todos.filter(l => l.tipo === 'despesa' && l.status === 'pendente'))
 
+  // Totais lançados (pago + pendente)
+  const receitasTotal = receitasPagas + receitasPendente
+  const despesasTotal = despesasPagas + despesasPendente
+
+  // Split administração vs obra — pago + pendente
+  const adm   = todos.filter(l => l.divisao === 'administracao')
   const obras = todos.filter(l => l.divisao === 'obra')
-  const obrasReceitas = obras.filter(l => l.tipo === 'receita' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
-  const obrasDespesas = obras.filter(l => l.tipo === 'despesa' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
 
-  // Resumo por projeto (obras vinculadas)
+  const admRec  = sum(adm.filter(l => l.tipo === 'receita' && l.status === 'pago'))
+  const admRecP = sum(adm.filter(l => l.tipo === 'receita' && l.status === 'pendente'))
+  const admDesp = sum(adm.filter(l => l.tipo === 'despesa' && l.status === 'pago'))
+  const admDespP= sum(adm.filter(l => l.tipo === 'despesa' && l.status === 'pendente'))
+
+  const obraRec  = sum(obras.filter(l => l.tipo === 'receita' && l.status === 'pago'))
+  const obraRecP = sum(obras.filter(l => l.tipo === 'receita' && l.status === 'pendente'))
+  const obraDesp = sum(obras.filter(l => l.tipo === 'despesa' && l.status === 'pago'))
+  const obraDespP= sum(obras.filter(l => l.tipo === 'despesa' && l.status === 'pendente'))
+
+  // Resumo por projeto (obras vinculadas) — inclui pendentes
   const projetoIds = [...new Set(obras.filter(l => l.projeto_id).map(l => l.projeto_id as string))]
-  let porProjeto: { id: string; nome: string; receitas: number; despesas: number; saldo: number }[] = []
+  let porProjeto: { id: string; nome: string; receitas: number; despesas: number; saldo: number; aReceber: number; aPagar: number }[] = []
   if (projetoIds.length > 0) {
     const { data: projetos } = await admin
       .from('projetos_diario')
@@ -267,45 +274,62 @@ export async function getDashboardFinanceiro() {
       .in('id', projetoIds)
     porProjeto = (projetos ?? []).map(p => {
       const pl = obras.filter(l => l.projeto_id === p.id)
-      const pr = pl.filter(l => l.tipo === 'receita' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
-      const pd = pl.filter(l => l.tipo === 'despesa' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
-      return { id: p.id, nome: p.nome, receitas: pr, despesas: pd, saldo: pr - pd }
+      const pr  = sum(pl.filter(l => l.tipo === 'receita' && l.status === 'pago'))
+      const pd  = sum(pl.filter(l => l.tipo === 'despesa' && l.status === 'pago'))
+      const prP = sum(pl.filter(l => l.tipo === 'receita' && l.status === 'pendente'))
+      const pdP = sum(pl.filter(l => l.tipo === 'despesa' && l.status === 'pendente'))
+      return { id: p.id, nome: p.nome, receitas: pr, despesas: pd, saldo: pr - pd, aReceber: prP, aPagar: pdP }
     })
   }
 
-  // Dados por mês (últimos 6 meses)
-  const meses: { mes: string; receitas: number; despesas: number }[] = []
+  // Dados por mês (últimos 6 meses) — barras: pago; linha fina: pendente
+  const meses: { mes: string; receitas: number; despesas: number; receitasPendente: number; despesasPendente: number }[] = []
   for (let i = 5; i >= 0; i--) {
     const d = new Date()
     d.setMonth(d.getMonth() - i)
     const ano = d.getFullYear()
     const mes = String(d.getMonth() + 1).padStart(2, '0')
     const label = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
-    const mesLanc = todos.filter(l => l.data?.startsWith(`${ano}-${mes}`))
+    const ml = todos.filter(l => l.data?.startsWith(`${ano}-${mes}`))
     meses.push({
       mes: label,
-      receitas: mesLanc.filter(l => l.tipo === 'receita' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0),
-      despesas: mesLanc.filter(l => l.tipo === 'despesa' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0),
+      receitas:          sum(ml.filter(l => l.tipo === 'receita' && l.status === 'pago')),
+      despesas:          sum(ml.filter(l => l.tipo === 'despesa' && l.status === 'pago')),
+      receitasPendente:  sum(ml.filter(l => l.tipo === 'receita' && l.status === 'pendente')),
+      despesasPendente:  sum(ml.filter(l => l.tipo === 'despesa' && l.status === 'pendente')),
     })
   }
 
   // Últimos 8 lançamentos
   const { data: recentes } = await admin
     .from('lancamentos_financeiros')
-    .select('*, categorias_financeiras(id, nome, tipo, divisao), projetos_diario(id, nome)')
+    .select('*, categorias_financeiras(id, nome, tipo, divisao)')
     .order('created_at', { ascending: false })
     .limit(8)
 
   return {
-    receitas,
-    despesas,
-    saldo: receitas - despesas,
-    aReceber,
-    aPagar,
+    // compatibilidade com campos antigos
+    receitas: receitasPagas,
+    despesas: despesasPagas,
+    saldo: receitasPagas - despesasPagas,
+    aReceber: receitasPendente,
+    aPagar: despesasPendente,
+    // novos campos
+    receitasTotal,
+    despesasTotal,
+    saldoProjetado: receitasTotal - despesasTotal,
     meses,
     recentes: recentes ?? [],
-    adm: { receitas: admReceitas, despesas: admDespesas, saldo: admReceitas - admDespesas },
-    obras: { receitas: obrasReceitas, despesas: obrasDespesas, saldo: obrasReceitas - obrasDespesas },
+    adm: {
+      receitas: admRec, receitasPendente: admRecP,
+      despesas: admDesp, despesasPendente: admDespP,
+      saldo: admRec - admDesp,
+    },
+    obras: {
+      receitas: obraRec, receitasPendente: obraRecP,
+      despesas: obraDesp, despesasPendente: obraDespP,
+      saldo: obraRec - obraDesp,
+    },
     porProjeto,
   }
 }
