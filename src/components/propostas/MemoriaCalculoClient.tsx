@@ -183,10 +183,13 @@ export default function MemoriaCalculoClient({
   const bdiValue       = directCost * (bdiCoeff - 1)
   const totalFinal     = directCost * bdiCoeff
 
-  // Preview serviço
+  // Preview serviço — cálculo depende da unidade
+  const unitType = svcUnit === 'm²' ? 'area' : (svcUnit === 'm linear' || svcUnit === 'm') ? 'linear' : 'qty'
   const totalM2 = useMemo(
-    () => meas.reduce((s, m) => s + (parseFloat(m.height) || 0) * (parseFloat(m.width) || 0), 0),
-    [meas]
+    () => unitType === 'area'
+      ? meas.reduce((s, m) => s + (parseFloat(m.height) || 0) * (parseFloat(m.width) || 0), 0)
+      : meas.reduce((s, m) => s + (parseFloat(m.height) || 0), 0),
+    [meas, unitType]
   )
   const svcSubtotal = totalM2 * (parseFloat(svcMoCost) || 0)
 
@@ -237,8 +240,12 @@ export default function MemoriaCalculoClient({
     if (isService) {
       if (!svcArea.trim() || !svcType.trim() || totalM2 === 0) { setItemSaving(false); return }
       const measurements: Measurement[] = meas
-        .filter(m => (parseFloat(m.height) || 0) * (parseFloat(m.width) || 0) > 0)
-        .map(m => ({ id: m.id, label: m.label, height: parseFloat(m.height) || 0, width: parseFloat(m.width) || 0 }))
+        .filter(m => (parseFloat(m.height) || 0) > 0)
+        .map(m => ({
+          id: m.id, label: m.label,
+          height: parseFloat(m.height) || 0,
+          width: unitType === 'area' ? (parseFloat(m.width) || 0) : 1,
+        }))
       const payload = {
         item_type: 'servico' as const,
         area_name: svcArea.trim(), service_type: svcType.trim(),
@@ -1098,15 +1105,13 @@ export default function MemoriaCalculoClient({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="label">Área *</label>
-                      <input className="input" placeholder="Ex: Fachada 1" value={svcArea} list="area-sugg"
+                      <input className="input" placeholder="Ex: Fachada 1" value={svcArea}
                         onChange={e => setSvcArea(e.target.value)} />
-                      <datalist id="area-sugg">{AREA_SUGGESTIONS.map(s => <option key={s} value={s} />)}</datalist>
                     </div>
                     <div>
                       <label className="label">Serviço *</label>
-                      <input className="input" placeholder="Ex: Pintura látex" value={svcType} list="svc-sugg"
+                      <input className="input" placeholder="Ex: Pintura látex" value={svcType}
                         onChange={e => setSvcType(e.target.value)} />
-                      <datalist id="svc-sugg">{SERVICE_SUGGESTIONS.map(s => <option key={s} value={s} />)}</datalist>
                     </div>
                   </div>
 
@@ -1115,7 +1120,7 @@ export default function MemoriaCalculoClient({
                     <label className="label">Unidade de medida</label>
                     <select
                       value={svcUnit}
-                      onChange={e => setSvcUnit(e.target.value)}
+                      onChange={e => { setSvcUnit(e.target.value); setMeas([newMeas()]) }}
                       className="input bg-white"
                     >
                       {UNITS_SERVICE.map(u => (
@@ -1124,10 +1129,12 @@ export default function MemoriaCalculoClient({
                     </select>
                   </div>
 
-                  {/* Medições */}
+                  {/* Medições — campos dinâmicos por unidade */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <label className="label mb-0">Medições (Altura × Largura)</label>
+                      <label className="label mb-0">
+                        {unitType === 'area' ? 'Medições (Altura × Largura)' : unitType === 'linear' ? 'Comprimentos' : 'Quantidades'}
+                      </label>
                       <button onClick={() => setMeas(prev => [...prev, newMeas()])}
                         className="text-xs text-blue-600 font-medium flex items-center gap-1 hover:text-blue-800">
                         <Plus className="w-3 h-3" /> Sub-área
@@ -1136,32 +1143,53 @@ export default function MemoriaCalculoClient({
 
                     <div className="space-y-2">
                       {meas.map((m, idx) => {
-                        const area = (parseFloat(m.height) || 0) * (parseFloat(m.width) || 0)
+                        const val = unitType === 'area'
+                          ? (parseFloat(m.height) || 0) * (parseFloat(m.width) || 0)
+                          : (parseFloat(m.height) || 0)
                         return (
                           <div key={m.id} className="flex items-center gap-2">
+                            {/* Descrição da sub-área */}
                             <input
                               className="input text-xs flex-1 min-w-0"
                               placeholder={`Sub-área ${idx + 1}`}
                               value={m.label}
                               onChange={e => setMeas(prev => prev.map(x => x.id === m.id ? { ...x, label: e.target.value } : x))}
                             />
-                            <input
-                              className="input text-sm w-20 text-center"
-                              type="number" placeholder="Alt" inputMode="decimal"
-                              value={m.height}
-                              onChange={e => setMeas(prev => prev.map(x => x.id === m.id ? { ...x, height: e.target.value } : x))}
-                            />
-                            <span className="text-gray-400 text-sm shrink-0">×</span>
-                            <input
-                              className="input text-sm w-20 text-center"
-                              type="number" placeholder="Larg" inputMode="decimal"
-                              value={m.width}
-                              onChange={e => setMeas(prev => prev.map(x => x.id === m.id ? { ...x, width: e.target.value } : x))}
-                            />
+
+                            {unitType === 'area' && (
+                              <>
+                                <input
+                                  className="input text-sm w-20 text-center"
+                                  type="number" placeholder="Alt" inputMode="decimal"
+                                  value={m.height}
+                                  onChange={e => setMeas(prev => prev.map(x => x.id === m.id ? { ...x, height: e.target.value } : x))}
+                                />
+                                <span className="text-gray-400 text-sm shrink-0">×</span>
+                                <input
+                                  className="input text-sm w-20 text-center"
+                                  type="number" placeholder="Larg" inputMode="decimal"
+                                  value={m.width}
+                                  onChange={e => setMeas(prev => prev.map(x => x.id === m.id ? { ...x, width: e.target.value } : x))}
+                                />
+                              </>
+                            )}
+
+                            {(unitType === 'linear' || unitType === 'qty') && (
+                              <input
+                                className="input text-sm w-28 text-center"
+                                type="number"
+                                placeholder={unitType === 'linear' ? 'Comp.' : 'Qtd'}
+                                inputMode="decimal"
+                                value={m.height}
+                                onChange={e => setMeas(prev => prev.map(x => x.id === m.id ? { ...x, height: e.target.value } : x))}
+                              />
+                            )}
+
                             <div className="w-16 text-right shrink-0">
-                              <span className="text-xs font-semibold text-gray-700">{area > 0 ? area.toFixed(1) : '—'}</span>
+                              <span className="text-xs font-semibold text-gray-700">{val > 0 ? val.toFixed(unitType === 'qty' ? 0 : 1) : '—'}</span>
                               <span className="text-[10px] text-gray-400"> {svcUnit}</span>
                             </div>
+
                             {meas.length > 1 && (
                               <button onClick={() => setMeas(prev => prev.filter(x => x.id !== m.id))}
                                 className="p-1 hover:bg-red-50 rounded-lg shrink-0">
@@ -1172,6 +1200,14 @@ export default function MemoriaCalculoClient({
                         )
                       })}
                     </div>
+
+                    {/* Botão + Sub-área também abaixo */}
+                    <button
+                      onClick={() => setMeas(prev => [...prev, newMeas()])}
+                      className="mt-2 w-full py-2 text-xs text-blue-600 font-medium flex items-center justify-center gap-1 hover:bg-blue-50 rounded-xl border border-dashed border-blue-200 transition-colors"
+                    >
+                      <Plus className="w-3 h-3" /> Sub-área
+                    </button>
 
                     {totalM2 > 0 && (
                       <div className="mt-2 flex justify-between items-center bg-blue-50 rounded-lg px-3 py-2">
