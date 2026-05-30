@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import type { CategoriaFinanceira } from '@/types/database'
 import LancamentoModal from './LancamentoModal'
-import { deleteLancamento, cancelarRecorrencia, updateLancamentoStatus, createCategoria, updateCategoria, deleteCategoria } from '@/app/(crm)/financeiro/actions'
+import { deleteLancamento, deleteLancamentoEProximos, cancelarRecorrencia, updateLancamentoStatus, createCategoria, updateCategoria, deleteCategoria } from '@/app/(crm)/financeiro/actions'
 
 function fmt(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -75,6 +75,7 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
   const [showModal, setShowModal] = useState(false)
   const [editTarget, setEditTarget] = useState<Lancamento | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Lancamento | null>(null)
+  const [deleteMode, setDeleteMode] = useState<'single' | 'group'>('single')
   const [cancelRecorrTarget, setCancelRecorrTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [togglingId, setTogglingId] = useState<string | null>(null)
@@ -143,9 +144,20 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
   async function handleDelete() {
     if (!deleteTarget) return
     setDeleting(true)
-    await deleteLancamento(deleteTarget.id)
-    setLancamentos(prev => prev.filter(l => l.id !== deleteTarget.id))
+    if (deleteMode === 'group' && deleteTarget.recorrencia_grupo_id && deleteTarget.status === 'pendente') {
+      await deleteLancamentoEProximos(deleteTarget.id, deleteTarget.recorrencia_grupo_id, deleteTarget.data)
+      // Remove do estado local: este + futuros pendentes do mesmo grupo
+      setLancamentos(prev => prev.filter(l =>
+        !(l.recorrencia_grupo_id === deleteTarget.recorrencia_grupo_id &&
+          l.status === 'pendente' &&
+          l.data >= deleteTarget.data)
+      ))
+    } else {
+      await deleteLancamento(deleteTarget.id)
+      setLancamentos(prev => prev.filter(l => l.id !== deleteTarget.id))
+    }
     setDeleteTarget(null)
+    setDeleteMode('single')
     setDeleting(false)
   }
 
@@ -568,7 +580,7 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
                               <RefreshCw size={13} />
                             </button>
                           )}
-                          <button onClick={() => setDeleteTarget(l)}
+                          <button onClick={() => { setDeleteTarget(l); setDeleteMode('single') }}
                             className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
                             <Trash2 size={13} />
                           </button>
@@ -660,13 +672,51 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <h3 className="text-base font-semibold text-gray-900 mb-2">Excluir lançamento?</h3>
-            <p className="text-sm text-gray-500 mb-5">
+            <h3 className="text-base font-semibold text-gray-900 mb-1">Excluir lançamento?</h3>
+            <p className="text-sm text-gray-500 mb-4">
               &quot;<strong>{deleteTarget.descricao}</strong>&quot; — {fmt(deleteTarget.valor)}
             </p>
+
+            {/* Opções para lançamento recorrente pendente */}
+            {deleteTarget.recorrencia_grupo_id && deleteTarget.status === 'pendente' && (
+              <div className="space-y-2 mb-5">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">O que deseja excluir?</p>
+                <label className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
+                  deleteMode === 'single' ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <input type="radio" name="deleteMode" value="single"
+                    checked={deleteMode === 'single'}
+                    onChange={() => setDeleteMode('single')}
+                    className="mt-0.5 accent-red-500" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">Somente este lançamento</p>
+                    <p className="text-xs text-gray-400">Os demais da série continuam programados</p>
+                  </div>
+                </label>
+                <label className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
+                  deleteMode === 'group' ? 'border-red-400 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <input type="radio" name="deleteMode" value="group"
+                    checked={deleteMode === 'group'}
+                    onChange={() => setDeleteMode('group')}
+                    className="mt-0.5 accent-red-500" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">Este e todos os próximos pendentes</p>
+                    <p className="text-xs text-gray-400">Remove este e os futuros não pagos da série</p>
+                  </div>
+                </label>
+              </div>
+            )}
+
             <div className="flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50">Cancelar</button>
-              <button onClick={handleDelete} disabled={deleting} className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white rounded-xl text-sm font-medium">
+              <button
+                onClick={() => { setDeleteTarget(null); setDeleteMode('single') }}
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white rounded-xl text-sm font-medium">
                 {deleting ? 'Excluindo...' : 'Excluir'}
               </button>
             </div>

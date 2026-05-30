@@ -209,6 +209,21 @@ export async function deleteLancamento(id: string) {
   return { error: null }
 }
 
+export async function deleteLancamentoEProximos(id: string, grupoId: string, data: string) {
+  const admin = adminClient()
+  // Deleta este lançamento + todos os pendentes futuros do mesmo grupo
+  const { error } = await admin
+    .from('lancamentos_financeiros')
+    .delete()
+    .eq('recorrencia_grupo_id', grupoId)
+    .eq('status', 'pendente')
+    .gte('data', data)
+  if (error) return { error: error.message }
+  revalidatePath('/financeiro')
+  revalidatePath('/financeiro/lancamentos')
+  return { error: null }
+}
+
 export async function getDashboardFinanceiro() {
   const admin = adminClient()
 
