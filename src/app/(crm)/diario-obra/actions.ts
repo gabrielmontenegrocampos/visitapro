@@ -77,10 +77,25 @@ export async function deleteRegistro(id: string, projetoId: string) {
   redirect(`/diario-obra/${projetoId}`)
 }
 
+async function ensureDiarioBucket() {
+  const admin = adminClient()
+  const { data: buckets } = await admin.storage.listBuckets()
+  const exists = buckets?.some(b => b.name === 'diario-obras')
+  if (!exists) {
+    await admin.storage.createBucket('diario-obras', {
+      public: true,
+      fileSizeLimit: 10 * 1024 * 1024, // 10 MB
+      allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif'],
+    })
+  }
+}
+
 export async function uploadFoto(registroId: string, projetoId: string, formData: FormData) {
   const admin = adminClient()
   const file = formData.get('file') as File
   if (!file) return { error: 'Arquivo nao encontrado' }
+
+  await ensureDiarioBucket()
 
   const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
   const path = `diario/${registroId}/${Date.now()}.${ext}`
@@ -88,7 +103,7 @@ export async function uploadFoto(registroId: string, projetoId: string, formData
   const bytes = await file.arrayBuffer()
   const { error: upErr } = await admin.storage
     .from('diario-obras')
-    .upload(path, bytes, { contentType: file.type, upsert: false })
+    .upload(path, bytes, { contentType: file.type, upsert: true })
   if (upErr) return { error: upErr.message }
 
   const { data: urlData } = admin.storage.from('diario-obras').getPublicUrl(path)
