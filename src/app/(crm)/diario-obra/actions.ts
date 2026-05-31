@@ -25,6 +25,25 @@ export async function createProjeto(proposalId: string, tituloPub: string) {
   return { data, error: null }
 }
 
+export interface EtapaPlano {
+  id: string
+  nome: string
+  peso: number        // % do total (0-100)
+  concluida: boolean
+  ordem: number
+}
+
+export async function updatePlanejamento(projetoId: string, etapas: EtapaPlano[]) {
+  const admin = adminClient()
+  const { error } = await admin
+    .from('projetos_diario')
+    .update({ planejamento: etapas })
+    .eq('id', projetoId)
+  if (error) return { error: error.message }
+  revalidatePath(`/diario-obra/${projetoId}`)
+  return { error: null }
+}
+
 export async function updateProjeto(id: string, fields: { titulo_publico?: string; ativo?: boolean }) {
   const admin = adminClient()
   const { error } = await admin.from('projetos_diario').update(fields).eq('id', id)

@@ -7,7 +7,8 @@ import {
   ArrowLeft, Plus, Copy, ExternalLink, Pencil, Trash2,
   AlertTriangle, Loader2, Camera, ChevronRight,
 } from 'lucide-react'
-import { createRegistro, deleteRegistro } from '@/app/(crm)/diario-obra/actions'
+import { createRegistro, deleteRegistro, type EtapaPlano } from '@/app/(crm)/diario-obra/actions'
+import PlanoObra from './PlanoObra'
 import { formatCurrency } from '@/lib/utils'
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://visitapro.vercel.app'
@@ -44,6 +45,7 @@ interface Registro {
 }
 interface Projeto {
   id: string; public_token: string; titulo_publico: string | null; ativo: boolean;
+  planejamento: EtapaPlano[] | null;
   proposals: {
     id: string; title: string; value: number; proposal_number: string | null;
     leads: { name: string; phone: string | null } | null
@@ -102,18 +104,24 @@ export default function DiarioTimelineClient({
     setDeleting(false)
   }
 
-  // Progresso: usa percentual_concluido manual (mais recente com valor > 0)
-  // Fallback: contagem de atividades se nenhum percentual foi informado
-  const percentuaisInformados = registros
-    .map(r => r.percentual_concluido ?? 0)
-    .filter(p => p > 0)
+  // Progresso — prioridade:
+  // 1. Plano da Obra (etapas com pesos) se existir e tiver etapas
+  // 2. percentual_concluido manual do último registro com valor > 0
+  // 3. Contagem de atividades (fallback)
+  const etaplaPlano = projeto.planejamento ?? []
   const allAtiv = registros.flatMap(r => r.atividades ?? [])
-  const donePct = percentuaisInformados.length > 0
-    ? Math.max(...percentuaisInformados)
-    : allAtiv.length
-      ? Math.round(allAtiv.filter(a => a.status === 'feito').length / allAtiv.length * 100)
-      : 0
-  const usandoPercentualManual = percentuaisInformados.length > 0
+  const percentuaisInformados = registros.map(r => r.percentual_concluido ?? 0).filter(p => p > 0)
+
+  const donePct = etaplaPlano.length > 0
+    ? etaplaPlano.filter(e => e.concluida).reduce((s, e) => s + (e.peso || 0), 0)
+    : percentuaisInformados.length > 0
+      ? Math.max(...percentuaisInformados)
+      : allAtiv.length
+        ? Math.round(allAtiv.filter(a => a.status === 'feito').length / allAtiv.length * 100)
+        : 0
+
+  const usandoPlano = etaplaPlano.length > 0
+  const usandoPercentualManual = !usandoPlano && percentuaisInformados.length > 0
 
   return (
     <>
@@ -164,12 +172,21 @@ export default function DiarioTimelineClient({
           </div>
         </div>
 
+        {/* Plano da Obra */}
+        <PlanoObra
+          projetoId={projeto.id}
+          initialEtapas={etaplaPlano}
+        />
+
         {/* Progress */}
         {(donePct > 0 || allAtiv.length > 0) && (
           <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 shadow-sm space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-700">Avanço físico da obra</span>
               <div className="flex items-center gap-2">
+                {usandoPlano && (
+                  <span className="text-[10px] text-blue-500 font-medium bg-blue-50 px-1.5 py-0.5 rounded">plano</span>
+                )}
                 {usandoPercentualManual && (
                   <span className="text-[10px] text-blue-500 font-medium bg-blue-50 px-1.5 py-0.5 rounded">informado</span>
                 )}
