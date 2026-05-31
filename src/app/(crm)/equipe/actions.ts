@@ -102,17 +102,26 @@ export async function getProfissional(id: string) {
 
   const { data: obras } = await admin
     .from('profissionais_obras')
-    .select('*, projetos_diario(id, nome, proposals(id, title, value))')
+    .select('*, projetos_diario(id, titulo_publico, proposals(id, title, value, leads(name)))')
     .eq('profissional_id', id)
     .order('data_entrada', { ascending: false })
 
   const { data: pagamentos } = await admin
     .from('lancamentos_financeiros')
-    .select('*, categorias_financeiras(id, nome), projetos_diario(id, nome)')
+    .select('*, categorias_financeiras(id, nome)')
     .eq('profissional_id', id)
     .order('data', { ascending: false })
 
-  return { prof, obras: obras ?? [], pagamentos: pagamentos ?? [] }
+  // Deriva nome dos projetos
+  const obrasEnriquecidas = (obras ?? []).map((o: any) => ({
+    ...o,
+    projetos_diario: o.projetos_diario ? {
+      ...o.projetos_diario,
+      nome: o.projetos_diario.titulo_publico || o.projetos_diario.proposals?.leads?.name || o.projetos_diario.proposals?.title || 'Projeto sem nome',
+    } : null,
+  }))
+
+  return { prof, obras: obrasEnriquecidas, pagamentos: pagamentos ?? [] }
 }
 
 export async function createProfissional(input: {

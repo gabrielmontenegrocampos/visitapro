@@ -25,10 +25,16 @@ export default async function ComprasPage() {
     getFornecedores(),
   ])
 
-  const { data: projetos } = await supabase
+  const { data: projetosRaw } = await supabase
     .from('projetos_diario')
-    .select('id, nome')
+    .select('id, titulo_publico, proposals(title, leads(name))')
     .order('created_at', { ascending: false })
+
+  // Deriva nome sem depender da coluna `nome`
+  const projetos = (projetosRaw ?? []).map((p: any) => ({
+    id: p.id,
+    nome: p.titulo_publico || p.proposals?.leads?.name || p.proposals?.title || 'Projeto sem nome',
+  }))
 
   return (
     <div className="space-y-4">
@@ -39,7 +45,7 @@ export default async function ComprasPage() {
       <ComprasClient
         ordens={ordens ?? []}
         fornecedores={fornecedores ?? []}
-        projetos={projetos ?? []}
+        projetos={projetos}
       />
     </div>
   )

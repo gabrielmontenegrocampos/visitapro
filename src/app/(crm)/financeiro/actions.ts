@@ -270,15 +270,16 @@ export async function getDashboardFinanceiro() {
   if (projetoIds.length > 0) {
     const { data: projetos } = await admin
       .from('projetos_diario')
-      .select('id, nome')
+      .select('id, titulo_publico, proposals(title, leads(name))')
       .in('id', projetoIds)
-    porProjeto = (projetos ?? []).map(p => {
+    porProjeto = (projetos ?? []).map((p: any) => {
       const pl = obras.filter(l => l.projeto_id === p.id)
       const pr  = sum(pl.filter(l => l.tipo === 'receita' && l.status === 'pago'))
       const pd  = sum(pl.filter(l => l.tipo === 'despesa' && l.status === 'pago'))
       const prP = sum(pl.filter(l => l.tipo === 'receita' && l.status === 'pendente'))
       const pdP = sum(pl.filter(l => l.tipo === 'despesa' && l.status === 'pendente'))
-      return { id: p.id, nome: p.nome, receitas: pr, despesas: pd, saldo: pr - pd, aReceber: prP, aPagar: pdP }
+      const nome = p.titulo_publico || p.proposals?.leads?.name || p.proposals?.title || 'Projeto sem nome'
+      return { id: p.id, nome, receitas: pr, despesas: pd, saldo: pr - pd, aReceber: prP, aPagar: pdP }
     })
   }
 
@@ -340,13 +341,22 @@ export async function getResultadoObra(projetoId: string) {
   const admin = adminClient()
 
   // Projeto + proposta vinculada
-  const { data: projeto } = await admin
+  const { data: projetoRaw } = await admin
     .from('projetos_diario')
-    .select('id, nome, proposal_id, proposals(id, title, value, status, leads(id, name, phone))')
+    .select('id, titulo_publico, proposal_id, proposals(id, title, value, status, leads(id, name, phone))')
     .eq('id', projetoId)
     .single()
 
-  if (!projeto) return null
+  if (!projetoRaw) return null
+
+  // Deriva nome sem depender da coluna `nome`
+  const projeto = {
+    ...projetoRaw,
+    nome: (projetoRaw as any).titulo_publico
+      || (projetoRaw as any).proposals?.leads?.name
+      || (projetoRaw as any).proposals?.title
+      || 'Projeto sem nome',
+  }
 
   // Lançamentos da obra
   const { data: lancamentos } = await admin
@@ -410,7 +420,11 @@ export async function getProjetosParaLancamento() {
   const admin = adminClient()
   const { data } = await admin
     .from('projetos_diario')
-    .select('id, nome, proposals(id, title, value, status)')
+    .select('id, titulo_publico, proposal_id, proposals(id, title, value, status, leads(id, name))')
     .order('created_at', { ascending: false })
-  return (data ?? []) as any[]
+  // Deriva o campo `nome` a partir de titulo_publico ou nome do lead/proposta
+  return (data ?? []).map((p: any) => ({
+    ...p,
+    nome: p.titulo_publico || p.proposals?.leads?.name || p.proposals?.title || 'Projeto sem nome',
+  })) as any[]
 }
