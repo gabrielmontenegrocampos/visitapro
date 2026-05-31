@@ -231,29 +231,29 @@ export default function DiarioEditorClient({
 
     for (const file of files) {
       try {
-        // 1. Pede ao servidor o path e URL de upload
-        const prep = await prepareUpload(initial.id, file.name, file.type)
+        // 1. Servidor gera signed upload URL com service role (sem RLS)
+        const prep = await prepareUpload(initial.id, file.name)
+        if (prep.error || !prep.signedUrl || !prep.publicUrl) {
+          console.error('Erro ao preparar upload:', prep.error)
+          continue
+        }
 
-        // 2. Browser faz POST direto no Supabase Storage (sem passar pelo Next.js)
-        const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        const res = await fetch(prep.uploadUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': file.type,
-            'x-upsert': 'true',
-            Authorization: `Bearer ${anonKey}`,
-          },
+        // 2. Browser faz PUT direto na signed URL — sem passar pelo Vercel
+        //    Sem limite de tamanho, sem timeout de 10s
+        const res = await fetch(prep.signedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
           body: file,
         })
 
         if (!res.ok) {
-          console.error('Erro no upload direto:', res.status, await res.text())
+          console.error('Erro no upload:', res.status, await res.text())
           continue
         }
 
-        // 3. Registra a URL no banco via server action
+        // 3. Registra a URL pública no banco
         await registrarFotoUrl(initial.id, projeto.id, prep.publicUrl)
-        setFotos(prev => [...prev, { url: prep.publicUrl, legenda: '', ordem: prev.length }])
+        setFotos(prev => [...prev, { url: prep.publicUrl!, legenda: '', ordem: prev.length }])
       } catch (err) {
         console.error('Erro ao fazer upload:', err)
       }

@@ -92,17 +92,27 @@ async function ensureDiarioBucket() {
 }
 
 /**
- * Etapa 1: prepara o path e retorna a URL pública final.
- * O browser faz o upload direto para o Supabase Storage (sem passar pelo servidor).
+ * Etapa 1: gera uma Signed Upload URL via service role.
+ * O browser usa essa URL para fazer o upload direto ao Supabase Storage
+ * sem passar pelo Next.js (sem limite de tamanho, sem timeout Vercel).
  */
-export async function prepareUpload(registroId: string, fileName: string, contentType: string) {
+export async function prepareUpload(registroId: string, fileName: string) {
+  const admin = adminClient()
   await ensureDiarioBucket()
+
   const ext = fileName.split('.').pop()?.toLowerCase() ?? 'jpg'
   const path = `diario/${registroId}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`
+
+  const { data, error } = await admin.storage
+    .from('diario-obras')
+    .createSignedUploadUrl(path)
+
+  if (error || !data) return { error: error?.message ?? 'Erro ao gerar URL de upload', signedUrl: null, publicUrl: null, path: null }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const uploadUrl = `${supabaseUrl}/storage/v1/object/diario-obras/${path}`
   const publicUrl = `${supabaseUrl}/storage/v1/object/public/diario-obras/${path}`
-  return { path, uploadUrl, publicUrl, contentType }
+
+  return { error: null, signedUrl: data.signedUrl, token: data.token, path, publicUrl }
 }
 
 /**
@@ -129,11 +139,11 @@ export async function registrarFotoUrl(registroId: string, projetoId: string, ur
   return { error: null }
 }
 
-// Mantido para compatibilidade com código antigo (não usado no novo fluxo)
+// Mantido para compatibilidade — não usado no novo fluxo
 export async function uploadFoto(registroId: string, projetoId: string, formData: FormData) {
   const file = formData.get('file') as File
   if (!file) return { error: 'Arquivo nao encontrado', url: null }
-  const prep = await prepareUpload(registroId, file.name, file.type)
+  const prep = await prepareUpload(registroId, file.name)
   return { error: 'Use o upload direto (prepareUpload + registrarFotoUrl)', url: null, prep }
 }
 
