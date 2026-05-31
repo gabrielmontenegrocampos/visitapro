@@ -158,20 +158,22 @@ export default function DiarioTimelineClient({
 
         {/* Progress */}
         {allAtiv.length > 0 && (
-          <div className="card p-4 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600 font-medium">Progresso geral da obra</span>
-              <span className="font-bold text-gray-900">{donePct}%</span>
+          <div className="flex items-center gap-3 bg-white border border-gray-100 rounded-xl px-4 py-2.5 shadow-sm">
+            <div className="flex-1 space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-gray-500 font-medium">Progresso geral da obra</span>
+                <span className="text-xs font-bold text-gray-900">{donePct}%</span>
+              </div>
+              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all duration-700"
+                  style={{ width: `${donePct}%` }}
+                />
+              </div>
             </div>
-            <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all duration-700"
-                style={{ width: `${donePct}%` }}
-              />
-            </div>
-            <p className="text-xs text-gray-400">
-              {allAtiv.filter(a => a.status === 'feito').length} de {allAtiv.length} atividades concluídas
-            </p>
+            <span className="text-xs text-gray-400 shrink-0">
+              {allAtiv.filter(a => a.status === 'feito').length}/{allAtiv.length}
+            </span>
           </div>
         )}
       </div>
@@ -210,36 +212,29 @@ export default function DiarioTimelineClient({
                     {isToday && <div className="w-2 h-2 rounded-full bg-white" />}
                   </div>
 
-                  <div className="card p-4 space-y-3 hover:shadow-md transition-shadow">
+                  <div className="card overflow-hidden hover:shadow-md transition-shadow">
                     {/* Header do card */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-gray-900">
-                            {isToday ? '🟢 Hoje — ' : ''}{formatDateShort(reg.data)}
-                          </span>
-                          <span className="text-base">{CLIMA_EMOJI[reg.clima] ?? '☀️'}</span>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[reg.status_obra] ?? 'bg-gray-100 text-gray-600'}`}>
-                            {STATUS_LABELS[reg.status_obra] ?? reg.status_obra}
-                          </span>
-                        </div>
+                    <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        {isToday && <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />}
+                        <span className="font-semibold text-gray-900 text-sm">
+                          {formatDateShort(reg.data)}
+                        </span>
+                        {reg.clima && <span className="text-sm">{CLIMA_EMOJI[reg.clima] ?? ''}</span>}
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[reg.status_obra] ?? 'bg-gray-100 text-gray-600'}`}>
+                          {STATUS_LABELS[reg.status_obra] ?? reg.status_obra}
+                        </span>
                         {reg.responsavel && (
-                          <p className="text-xs text-gray-400 mt-0.5">Responsável: {reg.responsavel}</p>
+                          <span className="text-xs text-gray-400 hidden sm:inline">· {reg.responsavel}</span>
                         )}
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Link
-                          href={`/diario-obra/${projeto.id}/${reg.id}`}
-                          className="p-1.5 hover:bg-blue-50 rounded-lg text-gray-400 hover:text-blue-600 transition-colors"
-                          title="Editar"
-                        >
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <Link href={`/diario-obra/${projeto.id}/${reg.id}`}
+                          className="p-1.5 hover:bg-blue-50 rounded-lg text-gray-300 hover:text-blue-600 transition-colors" title="Editar">
                           <Pencil className="w-3.5 h-3.5" />
                         </Link>
-                        <button
-                          onClick={() => setConfirmDeleteId(reg.id)}
-                          className="p-1.5 hover:bg-red-50 rounded-lg text-gray-300 hover:text-red-500 transition-colors"
-                          title="Excluir"
-                        >
+                        <button onClick={() => setConfirmDeleteId(reg.id)}
+                          className="p-1.5 hover:bg-red-50 rounded-lg text-gray-300 hover:text-red-500 transition-colors" title="Excluir">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -247,64 +242,54 @@ export default function DiarioTimelineClient({
 
                     {/* Atividades (max 3) */}
                     {ativs.length > 0 && (
-                      <div className="space-y-1">
+                      <div className="px-4 pb-2 space-y-0.5">
                         {ativs.slice(0, 3).map((a, i) => {
                           const s = ATIV_STATUS[a.status] ?? ATIV_STATUS['pendente']
                           return (
-                            <div key={i} className="flex items-start gap-2 text-sm">
-                              <span className="shrink-0 text-base leading-tight">{s.emoji}</span>
-                              <span className="text-gray-600">
-                                <span className="font-medium text-gray-800">{a.area}</span>
+                            <div key={i} className="flex items-start gap-1.5 text-xs">
+                              <span className="shrink-0 leading-tight">{s.emoji}</span>
+                              <span className="text-gray-600 leading-tight">
+                                <span className="font-medium text-gray-700">{a.area}</span>
                                 {a.descricao ? ` — ${a.descricao}` : ''}
                               </span>
                             </div>
                           )
                         })}
                         {ativs.length > 3 && (
-                          <p className="text-xs text-gray-400 pl-6">+{ativs.length - 3} atividades</p>
+                          <p className="text-xs text-gray-400 pl-5">+{ativs.length - 3} atividades</p>
                         )}
                       </div>
                     )}
 
-                    {/* Fotos e equipe */}
-                    <div className="flex items-center gap-4 text-xs text-gray-400 flex-wrap">
-                      {fotos.length > 0 && (
-                        <span className="flex items-center gap-1">
-                          <Camera className="w-3.5 h-3.5" />
-                          {fotos.length} {fotos.length === 1 ? 'foto' : 'fotos'}
-                        </span>
-                      )}
-                      {equipe.length > 0 && (
-                        <span>
-                          {equipe.map(m => m.nome).join(', ')}
-                          {equipe[0]?.horas ? ` (${equipe[0].horas}h)` : ''}
-                        </span>
-                      )}
-                    </div>
-
                     {/* Fotos preview (max 4) */}
                     {fotos.length > 0 && (
-                      <div className="grid grid-cols-4 gap-1.5">
+                      <div className="px-4 pb-2 grid grid-cols-4 gap-1">
                         {fotos.slice(0, 4).map((f: any, i: number) => (
                           <div key={i} className="aspect-square rounded-lg overflow-hidden bg-gray-100">
-                            <img
-                              src={f.url}
-                              alt={f.legenda || `Foto ${i + 1}`}
-                              className="w-full h-full object-cover"
-                            />
+                            <img src={f.url} alt={f.legenda || `Foto ${i + 1}`} className="w-full h-full object-cover" />
                           </div>
                         ))}
                       </div>
                     )}
 
-                    {/* Link editar */}
-                    <div className="pt-1 border-t border-gray-100">
-                      <Link
-                        href={`/diario-obra/${projeto.id}/${reg.id}`}
-                        className="flex items-center justify-between text-xs text-blue-600 font-medium hover:text-blue-800"
-                      >
-                        <span>Editar registro completo</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
+                    {/* Footer: metadados + link editar */}
+                    <div className="flex items-center justify-between px-4 py-2 border-t border-gray-50 bg-gray-50/50">
+                      <div className="flex items-center gap-3 text-xs text-gray-400">
+                        {fotos.length > 0 && (
+                          <span className="flex items-center gap-1">
+                            <Camera className="w-3 h-3" />
+                            {fotos.length}
+                          </span>
+                        )}
+                        {equipe.length > 0 && (
+                          <span className="truncate max-w-[120px]">
+                            {equipe.map(m => m.nome).filter(Boolean).join(', ')}
+                          </span>
+                        )}
+                      </div>
+                      <Link href={`/diario-obra/${projeto.id}/${reg.id}`}
+                        className="flex items-center gap-1 text-xs text-blue-600 font-medium hover:text-blue-800 shrink-0">
+                        Editar <ChevronRight className="w-3 h-3" />
                       </Link>
                     </div>
                   </div>
