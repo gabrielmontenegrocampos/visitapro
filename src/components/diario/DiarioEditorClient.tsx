@@ -28,6 +28,7 @@ interface Registro {
   notas_cliente: string | null;
   proximas_atividades: string | null;
   fotos: Foto[] | null;
+  percentual_concluido: number | null;
 }
 interface Projeto {
   id: string;
@@ -109,6 +110,7 @@ export default function DiarioEditorClient({
   const [responsavel, setResponsavel] = useState(initial.responsavel ?? '')
   const [clima, setClima]         = useState(initial.clima)
   const [statusObra, setStatusObra] = useState(initial.status_obra)
+  const [percentual, setPercentual] = useState(initial.percentual_concluido ?? 0)
   // Lists
   const [equipe, setEquipe]       = useState<MembroEquipe[]>(initial.equipe ?? [])
   const [atividades, setAtividades] = useState<Atividade[]>(initial.atividades ?? [])
@@ -119,8 +121,18 @@ export default function DiarioEditorClient({
   const [proximasAtividades, setProximasAtividades] = useState(initial.proximas_atividades ?? '')
   // Photos
   const [fotos, setFotos]         = useState<Foto[]>(initial.fotos ?? [])
-  const [uploadingFotos, setUploadingFotos] = useState(false)
-  const [lightboxUrl, setLightboxUrl]       = useState<string | null>(null)
+  // { name, progress 0-100 } por arquivo em upload
+  const [uploadQueue, setUploadQueue] = useState<{ name: string; progress: number }[]>([])
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+
+  const uploadingFotos = uploadQueue.length > 0
+  const uploadProgress = uploadQueue.length > 0
+    ? Math.round(uploadQueue.reduce((s, f) => s + f.progress, 0) / uploadQueue.length)
+    : 0
+
+  function setFileProgress(name: string, progress: number) {
+    setUploadQueue(prev => prev.map(f => f.name === name ? { ...f, progress } : f))
+  }
   // UI
   const [saved, setSaved]         = useState(false)
   const [saving, setSaving]       = useState(false)
@@ -227,29 +239,40 @@ export default function DiarioEditorClient({
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     if (!files.length) return
-    setUploadingFotos(true)
+
+    // Inicia fila com progresso 0
+    setUploadQueue(files.map(f => ({ name: f.name, progress: 0 })))
 
     for (const file of files) {
       try {
-        // 1. Servidor gera signed upload URL com service role (sem RLS)
+        // 1. Servidor gera signed upload URL com service role
         const prep = await prepareUpload(initial.id, file.name)
         if (prep.error || !prep.signedUrl || !prep.publicUrl) {
           console.error('Erro ao preparar upload:', prep.error)
+          setUploadQueue(prev => prev.filter(f => f.name !== file.name))
           continue
         }
 
-        // 2. Browser faz PUT direto na signed URL — sem passar pelo Vercel
-        //    Sem limite de tamanho, sem timeout de 10s
-        const res = await fetch(prep.signedUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': file.type },
-          body: file,
+        // 2. XHR com progresso real — sem passar pelo Vercel
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest()
+          xhr.open('PUT', prep.signedUrl!)
+          xhr.setRequestHeader('Content-Type', file.type)
+
+          xhr.upload.addEventListener('progress', ev => {
+            if (ev.lengthComputable) {
+              const pct = Math.round((ev.loaded / ev.total) * 100)
+              setFileProgress(file.name, pct)
+            }
+          })
+
+          xhr.addEventListener('load', () => {
+            if (xhr.status >= 200 && xhr.status < 300) resolve()
+            else reject(new Error(`HTTP ${xhr.status}`))
+          })
+          xhr.addEventListener('error', () => reject(new Error('Erro de rede')))
+          xhr.send(file)
         })
-
-        if (!res.ok) {
-          console.error('Erro no upload:', res.status, await res.text())
-          continue
-        }
 
         // 3. Registra a URL pública no banco
         await registrarFotoUrl(initial.id, projeto.id, prep.publicUrl)
@@ -257,9 +280,11 @@ export default function DiarioEditorClient({
       } catch (err) {
         console.error('Erro ao fazer upload:', err)
       }
+
+      // Remove da fila ao concluir
+      setUploadQueue(prev => prev.filter(f => f.name !== file.name))
     }
 
-    setUploadingFotos(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -374,6 +399,55 @@ export default function DiarioEditorClient({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Avanço físico acumulado */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="label">Avanço físico acumulado</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" min={0} max={100} step={1}
+                  value={percentual}
+                  onChange={e => {
+                    const v = Math.min(100, Math.max(0, Number(e.target.value)))
+                    setPercentual(v)
+                    debounceSave({ percentual_concluido: v })
+                  }}
+                  className="w-16 text-right border border-gray-200 rounded-lg px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-sm font-semibold text-gray-600">%</span>
+              </div>
+            </div>
+            <input
+              type="range" min={0} max={100} step={1}
+              value={percentual}
+              onChange={e => {
+                const v = Number(e.target.value)
+                setPercentual(v)
+                debounceSave({ percentual_concluido: v })
+              }}
+              className="w-full h-2 rounded-full accent-blue-600 cursor-pointer"
+            />
+            <div className="relative mt-1">
+              <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    percentual === 100 ? 'bg-green-500' :
+                    percentual >= 75  ? 'bg-blue-500'  :
+                    percentual >= 50  ? 'bg-blue-400'  :
+                    percentual >= 25  ? 'bg-amber-400' : 'bg-amber-300'
+                  }`}
+                  style={{ width: `${percentual}%` }}
+                />
+              </div>
+              <div className="flex justify-between mt-1 text-[10px] text-gray-300">
+                <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Informe o avanço real da obra nesta data — este valor prevalece sobre a contagem de atividades
+            </p>
           </div>
         </div>
 
@@ -609,14 +683,27 @@ export default function DiarioEditorClient({
                 </div>
               ))}
 
-              {/* Upload button */}
+              {/* Upload button / progresso */}
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingFotos}
-                className="aspect-square rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-400 hover:bg-blue-50 flex flex-col items-center justify-center gap-1.5 text-gray-400 hover:text-blue-500 transition-all"
+                className="aspect-square rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-400 hover:bg-blue-50 flex flex-col items-center justify-center gap-1.5 text-gray-400 hover:text-blue-500 transition-all disabled:opacity-60 disabled:cursor-not-allowed relative overflow-hidden"
               >
                 {uploadingFotos ? (
-                  <Loader2 className="w-6 h-6 animate-spin" />
+                  <>
+                    {/* Barra de progresso no fundo */}
+                    <div
+                      className="absolute bottom-0 left-0 h-1 bg-blue-500 transition-all duration-300 rounded-b-xl"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                    <span className="text-xs font-bold text-blue-600">{uploadProgress}%</span>
+                    {uploadQueue.length > 1 && (
+                      <span className="text-[10px] text-gray-400">
+                        {uploadQueue.length} fotos
+                      </span>
+                    )}
+                  </>
                 ) : (
                   <>
                     <Camera className="w-6 h-6" />
