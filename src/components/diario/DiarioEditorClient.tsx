@@ -7,7 +7,7 @@ import {
   Camera, Lock, MessageSquare, ClipboardList, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import {
-  updateRegistro, deleteRegistro, uploadFoto, removeFoto, updateFotoLegenda,
+  updateRegistro, deleteRegistro, prepareUpload, registrarFotoUrl, removeFoto, updateFotoLegenda,
 } from '@/app/(crm)/diario-obra/actions'
 
 // ---------------------------------------------------------------------------
@@ -228,14 +228,37 @@ export default function DiarioEditorClient({
     const files = Array.from(e.target.files ?? [])
     if (!files.length) return
     setUploadingFotos(true)
+
     for (const file of files) {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await uploadFoto(initial.id, projeto.id, fd)
-      if (!res.error && res.url) {
-        setFotos(prev => [...prev, { url: res.url!, legenda: '', ordem: prev.length }])
+      try {
+        // 1. Pede ao servidor o path e URL de upload
+        const prep = await prepareUpload(initial.id, file.name, file.type)
+
+        // 2. Browser faz POST direto no Supabase Storage (sem passar pelo Next.js)
+        const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        const res = await fetch(prep.uploadUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': file.type,
+            'x-upsert': 'true',
+            Authorization: `Bearer ${anonKey}`,
+          },
+          body: file,
+        })
+
+        if (!res.ok) {
+          console.error('Erro no upload direto:', res.status, await res.text())
+          continue
+        }
+
+        // 3. Registra a URL no banco via server action
+        await registrarFotoUrl(initial.id, projeto.id, prep.publicUrl)
+        setFotos(prev => [...prev, { url: prep.publicUrl, legenda: '', ordem: prev.length }])
+      } catch (err) {
+        console.error('Erro ao fazer upload:', err)
       }
     }
+
     setUploadingFotos(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }

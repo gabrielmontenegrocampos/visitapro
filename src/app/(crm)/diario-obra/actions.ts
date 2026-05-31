@@ -77,6 +77,7 @@ export async function deleteRegistro(id: string, projetoId: string) {
   redirect(`/diario-obra/${projetoId}`)
 }
 
+// Garante que o bucket público existe (chamado apenas uma vez por sessão via prepareUpload)
 async function ensureDiarioBucket() {
   const admin = adminClient()
   const { data: buckets } = await admin.storage.listBuckets()
@@ -84,31 +85,31 @@ async function ensureDiarioBucket() {
   if (!exists) {
     await admin.storage.createBucket('diario-obras', {
       public: true,
-      fileSizeLimit: 10 * 1024 * 1024, // 10 MB
-      allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif'],
+      fileSizeLimit: 20 * 1024 * 1024,
+      allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif', 'image/gif'],
     })
   }
 }
 
-export async function uploadFoto(registroId: string, projetoId: string, formData: FormData) {
-  const admin = adminClient()
-  const file = formData.get('file') as File
-  if (!file) return { error: 'Arquivo nao encontrado' }
-
+/**
+ * Etapa 1: prepara o path e retorna a URL pública final.
+ * O browser faz o upload direto para o Supabase Storage (sem passar pelo servidor).
+ */
+export async function prepareUpload(registroId: string, fileName: string, contentType: string) {
   await ensureDiarioBucket()
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? 'jpg'
+  const path = `diario/${registroId}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/diario-obras/${path}`
+  const publicUrl = `${supabaseUrl}/storage/v1/object/public/diario-obras/${path}`
+  return { path, uploadUrl, publicUrl, contentType }
+}
 
-  const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-  const path = `diario/${registroId}/${Date.now()}.${ext}`
-
-  const bytes = await file.arrayBuffer()
-  const { error: upErr } = await admin.storage
-    .from('diario-obras')
-    .upload(path, bytes, { contentType: file.type, upsert: true })
-  if (upErr) return { error: upErr.message }
-
-  const { data: urlData } = admin.storage.from('diario-obras').getPublicUrl(path)
-  const url = urlData.publicUrl
-
+/**
+ * Etapa 2: após o browser ter feito o upload, registra a URL no banco.
+ */
+export async function registrarFotoUrl(registroId: string, projetoId: string, url: string) {
+  const admin = adminClient()
   const { data: reg } = await admin
     .from('diario_obras')
     .select('fotos')
@@ -118,14 +119,22 @@ export async function uploadFoto(registroId: string, projetoId: string, formData
   const fotos: Array<{ url: string; legenda: string; ordem: number }> = (reg?.fotos as any[]) ?? []
   fotos.push({ url, legenda: '', ordem: fotos.length })
 
-  const { error: updErr } = await admin
+  const { error } = await admin
     .from('diario_obras')
     .update({ fotos, updated_at: new Date().toISOString() })
     .eq('id', registroId)
-  if (updErr) return { error: updErr.message }
+  if (error) return { error: error.message }
 
   revalidatePath(`/diario-obra/${projetoId}/${registroId}`)
-  return { error: null, url }
+  return { error: null }
+}
+
+// Mantido para compatibilidade com código antigo (não usado no novo fluxo)
+export async function uploadFoto(registroId: string, projetoId: string, formData: FormData) {
+  const file = formData.get('file') as File
+  if (!file) return { error: 'Arquivo nao encontrado', url: null }
+  const prep = await prepareUpload(registroId, file.name, file.type)
+  return { error: 'Use o upload direto (prepareUpload + registrarFotoUrl)', url: null, prep }
 }
 
 export async function removeFoto(registroId: string, projetoId: string, url: string) {
