@@ -70,6 +70,31 @@ function formatDate(dateStr: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Section — definido FORA do componente principal para evitar remount
+// a cada re-render (causaria perda de foco nos inputs)
+// ---------------------------------------------------------------------------
+function Section({ title, icon: Icon, children, defaultOpen = true }: {
+  title: string; icon: any; children: React.ReactNode; defaultOpen?: boolean
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="card overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center justify-between w-full p-4 text-left hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-2.5">
+          <Icon className="w-4 h-4 text-gray-500" />
+          <span className="font-semibold text-gray-800 text-sm">{title}</span>
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+      </button>
+      {open && <div className="px-4 pb-4 border-t border-gray-100 pt-4">{children}</div>}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 export default function DiarioEditorClient({
@@ -231,30 +256,6 @@ export default function DiarioEditorClient({
   async function handleDelete() {
     setDeleting(true)
     await deleteRegistro(initial.id, projeto.id)
-  }
-
-  // ---------------------------------------------------------------------------
-  // Section component
-  // ---------------------------------------------------------------------------
-  function Section({ title, icon: Icon, children, defaultOpen = true }: {
-    title: string; icon: any; children: React.ReactNode; defaultOpen?: boolean
-  }) {
-    const [open, setOpen] = useState(defaultOpen)
-    return (
-      <div className="card overflow-hidden">
-        <button
-          onClick={() => setOpen(o => !o)}
-          className="flex items-center justify-between w-full p-4 text-left hover:bg-gray-50 transition-colors"
-        >
-          <div className="flex items-center gap-2.5">
-            <Icon className="w-4 h-4 text-gray-500" />
-            <span className="font-semibold text-gray-800 text-sm">{title}</span>
-          </div>
-          {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-        </button>
-        {open && <div className="px-4 pb-4 border-t border-gray-100 pt-4">{children}</div>}
-      </div>
-    )
   }
 
   const clientName = projeto.proposals?.leads?.name ?? '—'
