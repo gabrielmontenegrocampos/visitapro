@@ -221,6 +221,61 @@ export async function deleteOrdemCompra(id: string) {
   return { error: error?.message }
 }
 
+export async function updateOrdemCompra(id: string, input: {
+  descricao: string
+  fornecedor_id?: string | null
+  projeto_id?: string | null
+  data_pedido: string
+  data_entrega_prevista?: string | null
+  forma_pagamento?: string | null
+  observacoes?: string | null
+  itens: { id?: string; descricao: string; quantidade: number; unidade?: string; valor_unitario: number }[]
+}) {
+  const admin = adminClient()
+  const { itens, ...ordemData } = input
+
+  // Atualiza dados da ordem
+  const { error } = await admin
+    .from('ordens_compra')
+    .update({ ...ordemData, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) return { error: error.message }
+
+  // Remove todos os itens antigos e reinserir (mais simples que diff)
+  await admin.from('itens_ordem_compra').delete().eq('ordem_id', id)
+
+  if (itens.length > 0) {
+    await admin.from('itens_ordem_compra').insert(
+      itens.map(i => ({
+        ordem_id: id,
+        descricao: i.descricao,
+        quantidade: i.quantidade,
+        unidade: i.unidade || null,
+        valor_unitario: i.valor_unitario,
+      }))
+    )
+  }
+
+  // Retorna a ordem atualizada
+  const { data: ordemCompleta } = await admin
+    .from('ordens_compra')
+    .select('*, fornecedores(id, nome), itens_ordem_compra(*)')
+    .eq('id', id)
+    .single()
+
+  revalidatePath('/compras')
+  return {
+    data: ordemCompleta
+      ? {
+          ...ordemCompleta,
+          projetos_diario: null,
+          total: (ordemCompleta.itens_ordem_compra ?? []).reduce((s: number, i: any) => s + Number(i.valor_total ?? 0), 0),
+        }
+      : null,
+    error: null,
+  }
+}
+
 export async function updateOrdensStatusBulk(ids: string[], status: string) {
   const admin = adminClient()
   const { error } = await admin

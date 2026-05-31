@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import {
   Plus, ShoppingCart, CheckCircle, XCircle, Package,
-  ChevronDown, ChevronUp, Trash2, Filter, X, CheckSquare,
+  ChevronDown, ChevronUp, Trash2, Filter, X, CheckSquare, Pencil,
 } from 'lucide-react'
 import { updateOrdemStatus, deleteOrdemCompra, updateOrdensStatusBulk } from '@/app/(crm)/compras/actions'
 import OrdemCompraModal from './OrdemCompraModal'
@@ -36,6 +36,7 @@ function enriquecerOrdem(o: any, projetos: { id: string; nome: string }[]) {
 export default function OrdensCompraTab({ ordens: initial, fornecedores, projetos }: Props) {
   const [ordens, setOrdens] = useState(() => initial.map(o => enriquecerOrdem(o, projetos)))
   const [showModal, setShowModal] = useState(false)
+  const [editTarget, setEditTarget] = useState<any | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [loading, setLoading] = useState<string | null>(null)
 
@@ -285,7 +286,14 @@ export default function OrdensCompraTab({ ordens: initial, fornecedores, projeto
                     {o.observacoes && (
                       <p className="mt-2 text-xs text-gray-500 italic">{o.observacoes}</p>
                     )}
-                    <div className="flex gap-2 mt-3">
+                    <div className="flex gap-2 mt-3 flex-wrap">
+                      {/* Editar — disponível enquanto não recebido/cancelado */}
+                      {!['recebido', 'cancelado'].includes(o.status) && (
+                        <button onClick={() => { setEditTarget(o); setExpandedId(null) }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 hover:bg-gray-100 rounded-lg text-xs font-medium">
+                          <Pencil size={12} /> Editar
+                        </button>
+                      )}
                       {o.status === 'solicitado' && (
                         <button onClick={() => handleStatus(o.id, 'aprovado')} disabled={loading === o.id}
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium">
@@ -324,14 +332,25 @@ export default function OrdensCompraTab({ ordens: initial, fornecedores, projeto
         )}
       </div>
 
-      {showModal && (
+      {(showModal || editTarget) && (
         <OrdemCompraModal
           fornecedores={fornecedores}
           projetos={projetos}
-          onClose={() => setShowModal(false)}
-          onSaved={nova => {
-            if (nova) setOrdens(prev => [enriquecerOrdem(nova, projetos), ...prev])
+          initial={editTarget ?? undefined}
+          onClose={() => { setShowModal(false); setEditTarget(null) }}
+          onSaved={ordem => {
+            if (ordem) {
+              const enriched = enriquecerOrdem(ordem, projetos)
+              if (editTarget) {
+                // Atualiza a ordem existente no estado
+                setOrdens(prev => prev.map(o => o.id === enriched.id ? enriched : o))
+              } else {
+                // Adiciona nova ao topo
+                setOrdens(prev => [enriched, ...prev])
+              }
+            }
             setShowModal(false)
+            setEditTarget(null)
           }}
         />
       )}
