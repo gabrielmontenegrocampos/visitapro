@@ -102,7 +102,14 @@ export default function OrdemCompraModal({ fornecedores, projetos, onClose, onSa
 
     const res = isEdit
       ? await updateOrdemCompra(initial!.id, payload)
-      : await createOrdemCompra(payload)
+      : await createOrdemCompra({
+          ...payload,
+          fornecedor_id: payload.fornecedor_id ?? undefined,
+          projeto_id: payload.projeto_id ?? undefined,
+          data_entrega_prevista: payload.data_entrega_prevista ?? undefined,
+          forma_pagamento: payload.forma_pagamento ?? undefined,
+          observacoes: payload.observacoes ?? undefined,
+        })
 
     setSaving(false)
     if (res.error) { setError(res.error); return }
