@@ -102,17 +102,6 @@ export default function DiarioTimelineClient({
     setDeleting(false)
   }
 
-  // Progresso: percentual_concluido manual (maior informado) ou contagem de atividades
-  const allAtiv = registros.flatMap(r => r.atividades ?? [])
-  const percentuaisInformados = registros.map(r => r.percentual_concluido ?? 0).filter(p => p > 0)
-
-  const donePct = percentuaisInformados.length > 0
-    ? Math.max(...percentuaisInformados)
-    : allAtiv.length
-      ? Math.round(allAtiv.filter(a => a.status === 'feito').length / allAtiv.length * 100)
-      : 0
-
-  const usandoPercentualManual = percentuaisInformados.length > 0
 
   return (
     <>
@@ -163,61 +152,6 @@ export default function DiarioTimelineClient({
           </div>
         </div>
 
-        {/* Progress */}
-        {(donePct > 0 || allAtiv.length > 0) && (
-          <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 shadow-sm space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-700">Avanço físico da obra</span>
-              <div className="flex items-center gap-2">
-                {usandoPercentualManual && (
-                  <span className="text-[10px] text-blue-500 font-medium bg-blue-50 px-1.5 py-0.5 rounded">informado</span>
-                )}
-                <span className={`text-lg font-bold ${
-                  donePct === 100 ? 'text-green-600' :
-                  donePct >= 75  ? 'text-blue-600'  :
-                  donePct >= 50  ? 'text-blue-500'  :
-                  donePct >= 25  ? 'text-amber-500' : 'text-gray-700'
-                }`}>{donePct}%</span>
-              </div>
-            </div>
-
-            {/* Barra principal */}
-            <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-700 ${
-                  donePct === 100 ? 'bg-green-500' :
-                  donePct >= 75  ? 'bg-blue-500'  :
-                  donePct >= 50  ? 'bg-blue-400'  :
-                  donePct >= 25  ? 'bg-amber-400' : 'bg-amber-300'
-                }`}
-                style={{ width: `${donePct}%` }}
-              />
-            </div>
-
-            {/* Marcações de referência */}
-            <div className="flex justify-between text-[10px] text-gray-300">
-              <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
-            </div>
-
-            {/* Sub-info */}
-            {allAtiv.length > 0 && (
-              <div className="flex items-center gap-3 text-[10px] text-gray-400 pt-0.5 border-t border-gray-50">
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-green-400 shrink-0"/>
-                  {allAtiv.filter(a => a.status === 'feito').length} concluídas
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0"/>
-                  {allAtiv.filter(a => a.status === 'em_andamento').length} em andamento
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-gray-300 shrink-0"/>
-                  {allAtiv.filter(a => a.status === 'pendente').length} pendentes
-                </span>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Timeline */}

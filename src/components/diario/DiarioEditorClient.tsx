@@ -28,7 +28,6 @@ interface Registro {
   notas_cliente: string | null;
   proximas_atividades: string | null;
   fotos: Foto[] | null;
-  percentual_concluido: number | null;
 }
 interface Projeto {
   id: string;
@@ -110,7 +109,6 @@ export default function DiarioEditorClient({
   const [responsavel, setResponsavel] = useState(initial.responsavel ?? '')
   const [clima, setClima]         = useState(initial.clima)
   const [statusObra, setStatusObra] = useState(initial.status_obra)
-  const [percentual, setPercentual] = useState(initial.percentual_concluido ?? 0)
   // Lists
   const [equipe, setEquipe]       = useState<MembroEquipe[]>(initial.equipe ?? [])
   const [atividades, setAtividades] = useState<Atividade[]>(initial.atividades ?? [])
@@ -401,54 +399,6 @@ export default function DiarioEditorClient({
             </div>
           </div>
 
-          {/* Avanço físico acumulado */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="label">Avanço físico acumulado</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number" min={0} max={100} step={1}
-                  value={percentual}
-                  onChange={e => {
-                    const v = Math.min(100, Math.max(0, Number(e.target.value)))
-                    setPercentual(v)
-                    debounceSave({ percentual_concluido: v })
-                  }}
-                  className="w-16 text-right border border-gray-200 rounded-lg px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <span className="text-sm font-semibold text-gray-600">%</span>
-              </div>
-            </div>
-            <input
-              type="range" min={0} max={100} step={1}
-              value={percentual}
-              onChange={e => {
-                const v = Number(e.target.value)
-                setPercentual(v)
-                debounceSave({ percentual_concluido: v })
-              }}
-              className="w-full h-2 rounded-full accent-blue-600 cursor-pointer"
-            />
-            <div className="relative mt-1">
-              <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-300 ${
-                    percentual === 100 ? 'bg-green-500' :
-                    percentual >= 75  ? 'bg-blue-500'  :
-                    percentual >= 50  ? 'bg-blue-400'  :
-                    percentual >= 25  ? 'bg-amber-400' : 'bg-amber-300'
-                  }`}
-                  style={{ width: `${percentual}%` }}
-                />
-              </div>
-              <div className="flex justify-between mt-1 text-[10px] text-gray-300">
-                <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
-              </div>
-            </div>
-            <p className="text-xs text-gray-400 mt-1">
-              Informe o avanço real da obra nesta data — este valor prevalece sobre a contagem de atividades
-            </p>
-          </div>
         </div>
 
         {/* Bloco 2 — Equipe */}
