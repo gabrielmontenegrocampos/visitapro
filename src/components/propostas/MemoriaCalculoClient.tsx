@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Plus, Trash2, Pencil, X, Loader2, Save,
@@ -14,6 +14,7 @@ import {
   createBdiItem, updateBdiItem, deleteBdiItem,
   updateProposalStatus, deleteProposal, generateProposal,
   saveProposalDetails,
+  createProposalArea, updateProposalArea, deleteProposalArea,
   type Measurement, type ClientRef,
 } from '@/app/(crm)/propostas/[id]/actions'
 import SearchableSelect from '@/components/ui/SearchableSelect'
@@ -61,8 +62,22 @@ interface ProposalRow {
   memorial_descritivo: string | null
 }
 
-type MeasForm = { id: string; label: string; height: string; width: string }
-function newMeas(): MeasForm { return { id: String(Date.now() + Math.random()), label: '', height: '', width: '' } }
+type MeasForm = { id: string; label: string; height: string; width: string; unit_cost: string }
+function newMeas(): MeasForm { return { id: String(Date.now() + Math.random()), label: '', height: '', width: '', unit_cost: '' } }
+
+interface ProposalAreaRow {
+  id: string
+  proposal_id: string
+  name: string
+  unit: string
+  measurements: Measurement[]
+  total_quantity: number
+  bdi_pct: number | null
+  sort_order: number
+  created_at: string
+}
+type AreaMeasForm = { id: string; label: string; height: string; width: string }
+function newAreaMeas(): AreaMeasForm { return { id: String(Date.now() + Math.random()), label: '', height: '', width: '' } }
 
 // ---------------------------------------------------------------------------
 // Constantes
@@ -103,11 +118,13 @@ export default function MemoriaCalculoClient({
   items: initialItems,
   bdiItems: initialBdi,
   settingsRefs = [],
+  initialAreas = [],
 }: {
   proposal: ProposalRow
   items: ItemRow[]
   bdiItems: BdiItemRow[]
   settingsRefs?: ClientRef[]
+  initialAreas?: ProposalAreaRow[]
 }) {
   const router = useRouter()
 
@@ -139,6 +156,34 @@ export default function MemoriaCalculoClient({
   const [simUnit,    setSimUnit]    = useState('un')
   const [simPrice,   setSimPrice]   = useState('')
   const [simNotes,   setSimNotes]   = useState('')
+
+  // Mapa de Áreas
+  const [areaItems,      setAreaItems]      = useState<ProposalAreaRow[]>(initialAreas)
+  const [showAreaModal,  setShowAreaModal]  = useState(false)
+  const [editingArea,    setEditingArea]    = useState<ProposalAreaRow | null>(null)
+  const [areaName,       setAreaName]       = useState('')
+  const [areaUnit,       setAreaUnit]       = useState('m²')
+  const [areaMeas,       setAreaMeas]       = useState<AreaMeasForm[]>([newAreaMeas()])
+  const [areaBdi,        setAreaBdi]        = useState('')
+  const [areaSaving,     setAreaSaving]     = useState(false)
+  const [areaError,      setAreaError]      = useState<string | null>(null)
+  const [deletingAreaId, setDeletingAreaId] = useState<string | null>(null)
+  // Importar área no modal de serviço
+  const [selectedAreaId, setSelectedAreaId] = useState('')
+  // Importar área no modal de material/equipamento
+  const [selectedAreaIdSim, setSelectedAreaIdSim] = useState('')
+  const [simAreaTotal,      setSimAreaTotal]      = useState(0)
+  const [simRendimento,     setSimRendimento]     = useState('')
+
+  // Foco automático em novo trecho
+  const areaMeasLabelRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const [focusAreaMeasId, setFocusAreaMeasId] = useState<string | null>(null)
+  useEffect(() => {
+    if (focusAreaMeasId && areaMeasLabelRefs.current[focusAreaMeasId]) {
+      areaMeasLabelRefs.current[focusAreaMeasId]?.focus()
+      setFocusAreaMeasId(null)
+    }
+  }, [focusAreaMeasId, areaMeas])
 
   // BDI inline
   const [editingBdi,  setEditingBdi]  = useState<BdiItemRow | null>(null)
@@ -183,6 +228,19 @@ export default function MemoriaCalculoClient({
   const bdiValue       = directCost * (bdiCoeff - 1)
   const totalFinal     = directCost * bdiCoeff
 
+  // Resumo agrupado por área
+  const resumoPorArea = useMemo(() => {
+    if (areaItems.length === 0) return []
+    const areaNames = new Set(areaItems.map(a => a.name))
+    return areaItems.map(area => {
+      const svcs  = serviceItems.filter(i => i.area_name === area.name)
+      const mats  = materialItems.filter(i => i.service_type === area.name)
+      const equip = equipItems.filter(i => i.service_type === area.name)
+      const total = [...svcs, ...mats, ...equip].reduce((s, i) => s + i.total_price, 0)
+      return { area, svcs, mats, equip, total }
+    }).filter(g => g.svcs.length + g.mats.length + g.equip.length > 0)
+  }, [areaItems, serviceItems, materialItems, equipItems])
+
   // Preview serviço — cálculo depende da unidade
   const unitType = svcUnit === 'm²' ? 'area' : (svcUnit === 'm linear' || svcUnit === 'm') ? 'linear' : 'qty'
   const totalM2 = useMemo(
@@ -191,7 +249,16 @@ export default function MemoriaCalculoClient({
       : meas.reduce((s, m) => s + (parseFloat(m.height) || 0), 0),
     [meas, unitType]
   )
-  const svcSubtotal = totalM2 * (parseFloat(svcMoCost) || 0)
+  const svcSubtotal = useMemo(() =>
+    meas.reduce((sum, m) => {
+      const area = unitType === 'area'
+        ? (parseFloat(m.height) || 0) * (parseFloat(m.width) || 0)
+        : (parseFloat(m.height) || 0)
+      const cost = parseFloat(m.unit_cost) || parseFloat(svcMoCost) || 0
+      return sum + area * cost
+    }, 0),
+    [meas, unitType, svcMoCost]
+  )
 
   // Preview simples
   const simSubtotal = (parseFloat(simQty) || 0) * (parseFloat(simPrice) || 0)
@@ -205,12 +272,15 @@ export default function MemoriaCalculoClient({
   // -- Abrir modais ----------------------------------------------------------
   function openAddService() {
     setEditingItem(null); setSvcArea(''); setSvcType(''); setSvcUnit('m²')
-    setSvcMoCost(''); setSvcNotes(''); setMeas([newMeas()]); setItemError(null); setModalType('servico')
+    setSvcMoCost(''); setSvcNotes(''); setMeas([newMeas()]); setItemError(null)
+    setSelectedAreaId(''); setModalType('servico')
   }
   function openAddSimple(type: 'material' | 'equipamento') {
     setEditingItem(null); setSimName(''); setSimQty('')
     setSimUnit(type === 'material' ? 'un' : 'dia')
-    setSimPrice(''); setSimNotes(''); setItemError(null); setModalType(type)
+    setSimPrice(''); setSimNotes(''); setItemError(null)
+    setSelectedAreaIdSim(''); setSimAreaTotal(0); setSimRendimento('')
+    setModalType(type)
   }
   function openEdit(item: ItemRow) {
     setEditingItem(item)
@@ -220,14 +290,20 @@ export default function MemoriaCalculoClient({
       setSvcNotes(item.description ?? '')
       setMeas(
         item.measurements?.length
-          ? item.measurements.map(m => ({ id: m.id, label: m.label, height: String(m.height), width: String(m.width) }))
+          ? item.measurements.map(m => ({ id: m.id, label: m.label, height: String(m.height), width: String(m.width), unit_cost: m.unit_cost ? String(m.unit_cost) : '' }))
           : [newMeas()]
       )
       setModalType('servico')
     } else {
       setSimName(item.area_name ?? ''); setSimQty(String(item.quantity))
       setSimUnit(item.unit ?? 'un'); setSimPrice(String(item.unit_price))
-      setSimNotes(item.description ?? ''); setModalType(item.item_type)
+      setSimNotes(item.description ?? '')
+      // Restaura área de referência se existir
+      const matchedArea = areaItems.find(a => a.name === item.service_type)
+      setSelectedAreaIdSim(matchedArea?.id ?? '')
+      setSimAreaTotal(matchedArea?.total_quantity ?? 0)
+      setSimRendimento('')
+      setModalType(item.item_type)
     }
   }
 
@@ -245,16 +321,22 @@ export default function MemoriaCalculoClient({
           id: m.id, label: m.label,
           height: parseFloat(m.height) || 0,
           width: unitType === 'area' ? (parseFloat(m.width) || 0) : 1,
+          ...(m.unit_cost ? { unit_cost: parseFloat(m.unit_cost) } : {}),
         }))
+      const globalCost = parseFloat(svcMoCost) || 0
+      const totalPrice = measurements.reduce((sum, m) => {
+        const area = unitType === 'area' ? m.height * m.width : m.height
+        const cost = m.unit_cost ?? globalCost
+        return sum + area * cost
+      }, 0)
       const payload = {
         item_type: 'servico' as const,
         area_name: svcArea.trim(), service_type: svcType.trim(),
         unit: svcUnit, measurements, quantity: totalM2,
-        labor_cost: parseFloat(svcMoCost) || 0,
+        labor_cost: globalCost,
         description: svcNotes.trim() || null,
       }
-      const unitPrice  = payload.labor_cost
-      const totalPrice = payload.quantity * unitPrice
+      const unitPrice = totalM2 > 0 ? totalPrice / totalM2 : globalCost
       if (editingItem) {
         const snap = items
         const opt: ItemRow = { ...editingItem, ...payload, unit_price: unitPrice, total_price: totalPrice }
@@ -279,6 +361,9 @@ export default function MemoriaCalculoClient({
         area_name: simName.trim(), unit: simUnit,
         quantity: parseFloat(simQty) || 0, unit_price: parseFloat(simPrice) || 0,
         description: simNotes.trim() || null,
+        service_type: selectedAreaIdSim
+          ? (areaItems.find(a => a.id === selectedAreaIdSim)?.name ?? null)
+          : null,
       }
       const totalPrice = payload.quantity * payload.unit_price
       if (editingItem) {
@@ -299,6 +384,97 @@ export default function MemoriaCalculoClient({
         else { if (res.data) setItems(prev => prev.map(i => i.id === tempId ? (res.data as ItemRow) : i)); setModalType(null); markSaved() }
       }
     }
+  }
+
+  // -- Mapa de Áreas --------------------------------------------------------
+  function addAreaMeasRow(currentList: AreaMeasForm[]) {
+    const newRow: AreaMeasForm = { ...newAreaMeas(), label: `Trecho ${currentList.length + 1}` }
+    setAreaMeas(prev => [...prev, newRow])
+    setFocusAreaMeasId(newRow.id)
+  }
+
+  function calcAreaTotal(meas: AreaMeasForm[], unit: string): number {
+    if (unit === 'm²') return meas.reduce((s, m) => s + (parseFloat(m.height) || 0) * (parseFloat(m.width) || 0), 0)
+    return meas.reduce((s, m) => s + (parseFloat(m.height) || 0), 0)
+  }
+
+  function openAddArea() {
+    setEditingArea(null); setAreaName(''); setAreaUnit('m²'); setAreaBdi('')
+    setAreaMeas([{ ...newAreaMeas(), label: 'Trecho 1' }]); setAreaError(null); setShowAreaModal(true)
+  }
+  function openEditArea(a: ProposalAreaRow) {
+    setEditingArea(a); setAreaName(a.name); setAreaUnit(a.unit)
+    setAreaBdi(a.bdi_pct != null ? String(a.bdi_pct) : '')
+    setAreaMeas(a.measurements.length
+      ? a.measurements.map(m => ({ id: m.id, label: m.label, height: String(m.height), width: String(m.width) }))
+      : [{ ...newAreaMeas(), label: 'Trecho 1' }])
+    setAreaError(null); setShowAreaModal(true)
+  }
+
+  async function handleSaveArea() {
+    if (!areaName.trim()) { setAreaError('Informe o nome da área'); return }
+    setAreaSaving(true); setAreaError(null)
+    const unitType = areaUnit === 'm²' ? 'area' : 'linear'
+    const measurements: Measurement[] = areaMeas
+      .filter(m => (parseFloat(m.height) || 0) > 0)
+      .map(m => ({
+        id: m.id, label: m.label,
+        height: parseFloat(m.height) || 0,
+        width: unitType === 'area' ? (parseFloat(m.width) || 0) : 1,
+      }))
+    const total_quantity = calcAreaTotal(areaMeas, areaUnit)
+    const parsedBdi = parseFloat(areaBdi)
+    const payload = {
+      name: areaName.trim(), unit: areaUnit, measurements, total_quantity,
+      bdi_pct: areaBdi.trim() !== '' && !isNaN(parsedBdi) ? parsedBdi : null,
+    }
+
+    if (editingArea) {
+      const snap = areaItems
+      setAreaItems(prev => prev.map(a => a.id === editingArea.id ? { ...a, ...payload } : a))
+      setShowAreaModal(false); setAreaSaving(false)
+      const res = await updateProposalArea(editingArea.id, proposal.id, payload)
+      if (res.error) { setAreaItems(snap); setAreaError(res.error); setShowAreaModal(true) }
+      else markSaved()
+    } else {
+      const tempId = `t${Date.now()}`
+      const opt: ProposalAreaRow = { id: tempId, proposal_id: proposal.id, sort_order: 0, created_at: '', ...payload }
+      setAreaItems(prev => [...prev, opt])
+      setShowAreaModal(false); setAreaSaving(false)
+      const res = await createProposalArea(proposal.id, payload)
+      if (res.error) { setAreaItems(prev => prev.filter(a => a.id !== tempId)); setAreaError(res.error); setShowAreaModal(true) }
+      else { if (res.data) setAreaItems(prev => prev.map(a => a.id === tempId ? (res.data as ProposalAreaRow) : a)); markSaved() }
+    }
+  }
+
+  async function handleDeleteArea(areaId: string) {
+    setDeletingAreaId(areaId)
+    const snap = areaItems
+    setAreaItems(prev => prev.filter(a => a.id !== areaId))
+    const res = await deleteProposalArea(areaId, proposal.id)
+    if (res.error) { setAreaItems(snap) }
+    setDeletingAreaId(null)
+  }
+
+  function applyAreaToSim(areaId: string) {
+    const area = areaItems.find(a => a.id === areaId)
+    if (!area) return
+    setSelectedAreaIdSim(areaId)
+    setSimAreaTotal(area.total_quantity)
+    setSimRendimento('')
+    // quantidade = total da área (sem rendimento definido)
+    setSimQty(String(area.total_quantity))
+  }
+
+  function applyAreaToService(areaId: string) {
+    const area = areaItems.find(a => a.id === areaId)
+    if (!area) return
+    setSelectedAreaId(areaId)
+    setSvcArea(area.name)
+    setSvcUnit(area.unit)
+    setMeas(area.measurements.length
+      ? area.measurements.map(m => ({ id: m.id, label: m.label, height: String(m.height), width: String(m.width), unit_cost: '' }))
+      : [newMeas()])
   }
 
   async function handleDeleteItem(item: ItemRow) {
@@ -437,6 +613,12 @@ export default function MemoriaCalculoClient({
             {isService && item.service_type && (
               <p className="text-xs text-blue-600 font-medium mt-0.5">{item.service_type}</p>
             )}
+            {!isService && item.service_type && (
+              <p className="text-xs text-teal-600 font-medium mt-0.5 flex items-center gap-1">
+                <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 16l4.553-2.276A1 1 0 0021 19.382V8.618a1 1 0 00-.553-.894L15 5m0 14V5m0 0L9 7" /></svg>
+                {item.service_type}
+              </p>
+            )}
           </div>
           <div className="flex gap-1 shrink-0">
             <button onClick={() => openEdit(item)} className="p-1.5 hover:bg-gray-100 rounded-lg">
@@ -551,11 +733,71 @@ export default function MemoriaCalculoClient({
           </div>
         )}
 
+        {/* ── MAPA DE ÁREAS ── */}
+        <div className="card overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 bg-teal-50 border-b border-teal-100">
+            <svg className="w-3.5 h-3.5 text-teal-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 16l4.553-2.276A1 1 0 0021 19.382V8.618a1 1 0 00-.553-.894L15 5m0 14V5m0 0L9 7" /></svg>
+            <span className="text-xs font-bold uppercase tracking-wider text-teal-700 flex-1">Mapa de Áreas</span>
+            <button onClick={openAddArea}
+              className="flex items-center gap-1 text-xs text-teal-700 font-semibold bg-teal-100 hover:bg-teal-200 px-2.5 py-1 rounded-lg transition-colors">
+              <Plus className="w-3 h-3" /> Nova área
+            </button>
+          </div>
+
+          {areaItems.length > 0 && (
+            <div className="divide-y divide-gray-100">
+              {areaItems.map(a => (
+                <div key={a.id} className={`flex items-center gap-3 px-4 py-2.5 transition-opacity ${deletingAreaId === a.id ? 'opacity-40' : ''}`}>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-semibold text-sm text-gray-800">{a.name}</span>
+                    {a.measurements.length > 0 && (
+                      <span className="ml-2 text-xs text-gray-400">
+                        {a.measurements.map(m => m.label || `${m.height}×${m.width}`).join(' + ')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {a.bdi_pct != null && (
+                      <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                        BDI {a.bdi_pct.toFixed(1)}%
+                      </span>
+                    )}
+                    <span className="font-bold text-teal-700 text-sm">
+                      {a.total_quantity.toFixed(2)} {a.unit}
+                    </span>
+                  </div>
+                  <button onClick={() => openEditArea(a)} className="p-1.5 hover:bg-gray-100 rounded-lg shrink-0">
+                    <Pencil className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+                  <button onClick={() => handleDeleteArea(a.id)} className="p-1.5 hover:bg-red-50 rounded-lg shrink-0">
+                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {areaItems.length === 0 && (
+            <div className="px-4 py-5 text-center">
+              <p className="text-xs text-gray-400">Defina as áreas medidas uma única vez e reuse em qualquer serviço.</p>
+              <button onClick={openAddArea} className="mt-2 text-xs text-teal-600 font-semibold hover:underline">
+                + Adicionar primeira área
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* ── SERVIÇOS ── */}
         <div className="space-y-2">
           <SectionHeader icon={<Hammer className="w-3.5 h-3.5 text-blue-700" />} label="Serviços / Mão de Obra" color="bg-blue-50 text-blue-700" />
           {serviceItems.map(item => <ItemCard key={item.id} item={item} />)}
           {serviceItems.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Nenhum serviço adicionado</p>}
+          {serviceItems.length > 0 && (
+            <div className="flex items-center justify-between px-3 py-2 bg-blue-50 rounded-xl">
+              <span className="text-xs font-semibold text-blue-700">Subtotal Serviços</span>
+              <span className="font-bold text-blue-700 text-sm">{formatCurrency(serviceItems.reduce((s, i) => s + i.total_price, 0))}</span>
+            </div>
+          )}
           <button onClick={openAddService} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-blue-200 rounded-xl text-sm text-blue-500 hover:bg-blue-50 transition-all">
             <Plus className="w-4 h-4" /> Adicionar serviço
           </button>
@@ -566,6 +808,12 @@ export default function MemoriaCalculoClient({
           <SectionHeader icon={<Package className="w-3.5 h-3.5 text-green-700" />} label="Materiais" color="bg-green-50 text-green-700" />
           {materialItems.map(item => <ItemCard key={item.id} item={item} />)}
           {materialItems.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Nenhum material adicionado</p>}
+          {materialItems.length > 0 && (
+            <div className="flex items-center justify-between px-3 py-2 bg-green-50 rounded-xl">
+              <span className="text-xs font-semibold text-green-700">Subtotal Materiais</span>
+              <span className="font-bold text-green-700 text-sm">{formatCurrency(materialItems.reduce((s, i) => s + i.total_price, 0))}</span>
+            </div>
+          )}
           <button onClick={() => openAddSimple('material')} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-green-200 rounded-xl text-sm text-green-600 hover:bg-green-50 transition-all">
             <Plus className="w-4 h-4" /> Adicionar material
           </button>
@@ -576,10 +824,142 @@ export default function MemoriaCalculoClient({
           <SectionHeader icon={<Wrench className="w-3.5 h-3.5 text-orange-700" />} label="Equipamentos" color="bg-orange-50 text-orange-700" />
           {equipItems.map(item => <ItemCard key={item.id} item={item} />)}
           {equipItems.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Nenhum equipamento adicionado</p>}
+          {equipItems.length > 0 && (
+            <div className="flex items-center justify-between px-3 py-2 bg-orange-50 rounded-xl">
+              <span className="text-xs font-semibold text-orange-700">Subtotal Equipamentos</span>
+              <span className="font-bold text-orange-700 text-sm">{formatCurrency(equipItems.reduce((s, i) => s + i.total_price, 0))}</span>
+            </div>
+          )}
           <button onClick={() => openAddSimple('equipamento')} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-orange-200 rounded-xl text-sm text-orange-600 hover:bg-orange-50 transition-all">
             <Plus className="w-4 h-4" /> Adicionar equipamento
           </button>
         </div>
+
+        {/* ── RESUMO POR ÁREA ── */}
+        {resumoPorArea.length > 0 && (
+          <div className="card overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">
+              <svg className="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-600 flex-1">Resumo por Área</span>
+              <span className="text-xs text-slate-400">{resumoPorArea.length} área{resumoPorArea.length > 1 ? 's' : ''}</span>
+            </div>
+
+            <div className="divide-y divide-gray-100">
+              {resumoPorArea.map(({ area, svcs, mats, equip, total }) => {
+                const areaBdiPct  = area.bdi_pct != null ? area.bdi_pct : bdiTotal
+                const areaBdiVal  = total * (areaBdiPct / 100)
+                const areaFinal   = total + areaBdiVal
+                const hasCustomBdi = area.bdi_pct != null
+
+                return (
+                  <div key={area.id} className="px-4 py-3 space-y-2">
+                    {/* Cabeçalho da área */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-teal-500 shrink-0" />
+                        <span className="font-bold text-gray-800 text-sm">{area.name}</span>
+                        <span className="text-xs text-gray-400">{area.total_quantity.toFixed(2)} {area.unit}</span>
+                      </div>
+                      {hasCustomBdi && (
+                        <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                          BDI {area.bdi_pct!.toFixed(1)}% próprio
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Serviços desta área */}
+                    {svcs.length > 0 && (
+                      <div className="ml-4 space-y-1">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-blue-500 mb-1">Serviços</p>
+                        {svcs.map(i => (
+                          <div key={i.id} className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-gray-600 truncate flex-1">{i.service_type ?? i.area_name}</span>
+                            <span className="text-gray-400 shrink-0">{i.quantity.toFixed(2)} {i.unit} × {formatCurrency(i.unit_price)}</span>
+                            <span className="font-semibold text-gray-800 shrink-0 w-24 text-right">{formatCurrency(i.total_price)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-xs border-t border-blue-100 pt-1 text-blue-600 font-medium">
+                          <span>Subtotal serviços</span>
+                          <span>{formatCurrency(svcs.reduce((s, i) => s + i.total_price, 0))}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Materiais desta área */}
+                    {mats.length > 0 && (
+                      <div className="ml-4 space-y-1">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-green-500 mb-1">Materiais</p>
+                        {mats.map(i => (
+                          <div key={i.id} className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-gray-600 truncate flex-1">{i.area_name}</span>
+                            <span className="text-gray-400 shrink-0">{i.quantity.toFixed(2)} {i.unit} × {formatCurrency(i.unit_price)}</span>
+                            <span className="font-semibold text-gray-800 shrink-0 w-24 text-right">{formatCurrency(i.total_price)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-xs border-t border-green-100 pt-1 text-green-600 font-medium">
+                          <span>Subtotal materiais</span>
+                          <span>{formatCurrency(mats.reduce((s, i) => s + i.total_price, 0))}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Equipamentos desta área */}
+                    {equip.length > 0 && (
+                      <div className="ml-4 space-y-1">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-orange-500 mb-1">Equipamentos</p>
+                        {equip.map(i => (
+                          <div key={i.id} className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-gray-600 truncate flex-1">{i.area_name}</span>
+                            <span className="text-gray-400 shrink-0">{i.quantity.toFixed(2)} {i.unit} × {formatCurrency(i.unit_price)}</span>
+                            <span className="font-semibold text-gray-800 shrink-0 w-24 text-right">{formatCurrency(i.total_price)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Custo direto + BDI + Total da área */}
+                    <div className="ml-4 rounded-xl border border-slate-200 overflow-hidden">
+                      <div className="flex justify-between text-xs px-3 py-1.5 bg-white">
+                        <span className="text-gray-500">Custo direto {area.name}</span>
+                        <span className="font-medium text-gray-700">{formatCurrency(total)}</span>
+                      </div>
+                      {areaBdiPct > 0 && (
+                        <div className="flex justify-between text-xs px-3 py-1.5 bg-white border-t border-slate-100">
+                          <span className="text-purple-500 flex items-center gap-1">
+                            <Percent className="w-3 h-3" />
+                            BDI {areaBdiPct.toFixed(1)}%{!hasCustomBdi && <span className="text-gray-400"> (global)</span>}
+                          </span>
+                          <span className="font-medium text-purple-600">{formatCurrency(areaBdiVal)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between px-3 py-2 bg-slate-700">
+                        <span className="text-xs font-bold text-white">Total {area.name}</span>
+                        <span className="font-bold text-white">{formatCurrency(areaFinal)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* Total geral do resumo com BDI */}
+              <div className="px-4 py-3 bg-slate-100 space-y-1">
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>Custo direto total (áreas)</span>
+                  <span>{formatCurrency(resumoPorArea.reduce((s, g) => s + g.total, 0))}</span>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-slate-200">
+                  <span className="text-sm font-bold text-slate-700">Total geral com BDI</span>
+                  <span className="font-bold text-slate-900 text-base">
+                    {formatCurrency(resumoPorArea.reduce((s, g) => {
+                      const pct = g.area.bdi_pct != null ? g.area.bdi_pct : bdiTotal
+                      return s + g.total * (1 + pct / 100)
+                    }, 0))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── BDI ── */}
         <div className="card overflow-hidden">
@@ -901,6 +1281,181 @@ export default function MemoriaCalculoClient({
         </div>
       </div>
 
+      {/* ══ Modal Mapa de Áreas ══ */}
+      {showAreaModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !areaSaving && setShowAreaModal(false)} />
+          <div className="relative bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl z-10 max-h-[92vh] flex flex-col">
+
+            <div className="flex justify-center pt-3 pb-1 sm:hidden"><div className="w-10 h-1 bg-gray-200 rounded-full" /></div>
+
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+              <h2 className="font-bold text-gray-900">
+                {editingArea ? 'Editar área' : 'Nova área'}
+              </h2>
+              <button onClick={() => setShowAreaModal(false)} className="p-2 hover:bg-gray-100 rounded-xl">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="label">Nome da área *</label>
+                  <input
+                    className="input"
+                    placeholder="Ex: Fachada, Garagem, Muros..."
+                    value={areaName}
+                    list="area-name-suggestions"
+                    onChange={e => setAreaName(e.target.value)}
+                  />
+                  <datalist id="area-name-suggestions">
+                    {AREA_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+                  </datalist>
+                </div>
+                <div>
+                  <label className="label">Unidade</label>
+                  <select className="input bg-white" value={areaUnit} onChange={e => { setAreaUnit(e.target.value); setAreaMeas([newAreaMeas()]) }}>
+                    {UNITS_SERVICE.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="label mb-2">
+                  {areaUnit === 'm²' ? 'Medições (Altura × Largura)' : 'Comprimentos / Quantidades'}
+                </label>
+
+                <div className="space-y-2">
+                  {areaMeas.map((m, idx) => {
+                    const isLast = idx === areaMeas.length - 1
+                    const val = areaUnit === 'm²'
+                      ? (parseFloat(m.height) || 0) * (parseFloat(m.width) || 0)
+                      : (parseFloat(m.height) || 0)
+                    const handleLastTab = (e: React.KeyboardEvent) => {
+                      if (e.key === 'Tab' && !e.shiftKey && isLast) {
+                        e.preventDefault()
+                        addAreaMeasRow(areaMeas)
+                      }
+                    }
+                    return (
+                      <div key={m.id} className="flex items-center gap-2">
+                        <input
+                          ref={el => { areaMeasLabelRefs.current[m.id] = el }}
+                          className="input text-xs flex-1 min-w-0"
+                          placeholder={`Trecho ${idx + 1}`}
+                          value={m.label}
+                          onChange={e => setAreaMeas(prev => prev.map(x => x.id === m.id ? { ...x, label: e.target.value } : x))}
+                        />
+                        <input
+                          className="input text-sm w-20 text-center"
+                          type="number" placeholder={areaUnit === 'm²' ? 'Alt' : 'Qtd'} inputMode="decimal"
+                          value={m.height}
+                          onChange={e => setAreaMeas(prev => prev.map(x => x.id === m.id ? { ...x, height: e.target.value } : x))}
+                          onKeyDown={areaUnit !== 'm²' ? handleLastTab : undefined}
+                        />
+                        {areaUnit === 'm²' && (
+                          <>
+                            <span className="text-gray-400 text-sm shrink-0">×</span>
+                            <input
+                              className="input text-sm w-20 text-center"
+                              type="number" placeholder="Larg" inputMode="decimal"
+                              value={m.width}
+                              onChange={e => setAreaMeas(prev => prev.map(x => x.id === m.id ? { ...x, width: e.target.value } : x))}
+                              onKeyDown={handleLastTab}
+                            />
+                          </>
+                        )}
+                        <div className="w-16 text-right shrink-0">
+                          <span className="text-xs font-semibold text-gray-700">{val > 0 ? val.toFixed(1) : '—'}</span>
+                          <span className="text-[10px] text-gray-400"> {areaUnit}</span>
+                        </div>
+                        {areaMeas.length > 1 && (
+                          <button onClick={() => setAreaMeas(prev => prev.filter(x => x.id !== m.id))}
+                            className="p-1 hover:bg-red-50 rounded-lg shrink-0">
+                            <X className="w-3.5 h-3.5 text-red-400" />
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Botão + Trecho abaixo da lista */}
+                <button
+                  onClick={() => addAreaMeasRow(areaMeas)}
+                  className="mt-2 w-full py-2 text-xs text-teal-600 font-medium flex items-center justify-center gap-1 hover:bg-teal-50 rounded-xl border border-dashed border-teal-200 transition-colors"
+                >
+                  <Plus className="w-3 h-3" /> Trecho
+                </button>
+
+                {calcAreaTotal(areaMeas, areaUnit) > 0 && (
+                  <div className="mt-2 flex justify-between items-center bg-teal-50 rounded-lg px-3 py-2">
+                    <span className="text-xs text-teal-600 font-medium">Total</span>
+                    <span className="font-bold text-teal-700">
+                      {calcAreaTotal(areaMeas, areaUnit).toFixed(2)} {areaUnit}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* BDI personalizado */}
+              <div className="pt-2 border-t border-gray-100">
+                <label className="label flex items-center gap-1.5">
+                  <Percent className="w-3.5 h-3.5 text-purple-500" />
+                  BDI desta área <span className="text-gray-400 font-normal">(opcional)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      className="input text-sm pr-8"
+                      type="number" min="0" max="200" step="0.5"
+                      placeholder={bdiTotal > 0 ? `Padrão: ${bdiTotal.toFixed(1)}% (global)` : 'Ex: 25'}
+                      inputMode="decimal"
+                      value={areaBdi}
+                      onChange={e => setAreaBdi(e.target.value)}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+                  </div>
+                  {areaBdi && (
+                    <button onClick={() => setAreaBdi('')} className="text-xs text-gray-400 hover:text-gray-600 shrink-0">
+                      Usar global
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  {areaBdi
+                    ? `BDI de ${areaBdi}% aplicado ao custo direto desta área`
+                    : bdiTotal > 0
+                      ? `Herdará o BDI global: ${bdiTotal.toFixed(1)}%`
+                      : 'Nenhum BDI global definido ainda'}
+                </p>
+              </div>
+            </div>
+
+            {areaError && (
+              <div className="mx-5 mb-1 px-3 py-2 bg-red-50 border border-red-200 rounded-xl flex items-start justify-between gap-2 shrink-0">
+                <p className="text-xs text-red-700 font-medium">{areaError}</p>
+                <button onClick={() => setAreaError(null)}><X className="w-3.5 h-3.5 text-red-400 shrink-0" /></button>
+              </div>
+            )}
+
+            <div className="flex gap-3 px-5 py-4 border-t border-gray-100 shrink-0">
+              <button onClick={() => setShowAreaModal(false)} className="btn-secondary flex-1 text-sm">Cancelar</button>
+              <button
+                onClick={handleSaveArea}
+                disabled={areaSaving || !areaName.trim()}
+                className="btn-primary flex-1 text-sm flex items-center justify-center gap-2"
+              >
+                {areaSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {areaSaving ? 'Salvando...' : editingArea ? 'Atualizar' : 'Salvar área'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ══ Modal confirmar exclusão ══ */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
@@ -1102,11 +1657,40 @@ export default function MemoriaCalculoClient({
               {/* ── Formulário de Serviço ── */}
               {modalType === 'servico' && (
                 <>
+                  {/* Importar do Mapa de Áreas */}
+                  {areaItems.length > 0 && (
+                    <div className="bg-teal-50 rounded-xl p-3 space-y-2">
+                      <p className="text-xs font-semibold text-teal-700 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 16l4.553-2.276A1 1 0 0021 19.382V8.618a1 1 0 00-.553-.894L15 5m0 14V5m0 0L9 7" /></svg>
+                        Importar área do mapa
+                      </p>
+                      <div className="flex gap-2">
+                        <select
+                          className="input text-sm bg-white flex-1"
+                          value={selectedAreaId}
+                          onChange={e => applyAreaToService(e.target.value)}
+                        >
+                          <option value="">Selecione uma área...</option>
+                          {areaItems.map(a => (
+                            <option key={a.id} value={a.id}>
+                              {a.name} — {a.total_quantity.toFixed(2)} {a.unit}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {selectedAreaId && (
+                        <p className="text-[11px] text-teal-600">
+                          ✓ Medições importadas. Você pode ajustá-las abaixo se necessário.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="label">Área *</label>
                       <input className="input" placeholder="Ex: Fachada 1" value={svcArea}
-                        onChange={e => setSvcArea(e.target.value)} />
+                        onChange={e => { setSvcArea(e.target.value); setSelectedAreaId('') }} />
                     </div>
                     <div>
                       <label className="label">Serviço *</label>
@@ -1139,6 +1723,14 @@ export default function MemoriaCalculoClient({
                         className="text-xs text-blue-600 font-medium flex items-center gap-1 hover:text-blue-800">
                         <Plus className="w-3 h-3" /> Sub-área
                       </button>
+                    </div>
+                    <div className="flex items-center gap-2 mb-1 px-0.5">
+                      <span className="flex-1 text-[10px] text-gray-400">Descrição</span>
+                      {unitType === 'area' && <><span className="w-20 text-[10px] text-gray-400 text-center">Alt (m)</span><span className="w-4" /><span className="w-20 text-[10px] text-gray-400 text-center">Larg (m)</span></>}
+                      {(unitType === 'linear' || unitType === 'qty') && <span className="w-28 text-[10px] text-gray-400 text-center">{unitType === 'linear' ? 'Comp.' : 'Qtd'}</span>}
+                      <span className="w-14 text-[10px] text-gray-400 text-right">Qtd.</span>
+                      <span className="w-20 text-[10px] text-gray-400 text-center">Custo (R$)</span>
+                      {meas.length > 1 && <span className="w-6" />}
                     </div>
 
                     <div className="space-y-2">
@@ -1185,9 +1777,21 @@ export default function MemoriaCalculoClient({
                               />
                             )}
 
-                            <div className="w-16 text-right shrink-0">
+                            <div className="w-14 text-right shrink-0">
                               <span className="text-xs font-semibold text-gray-700">{val > 0 ? val.toFixed(unitType === 'qty' ? 0 : 1) : '—'}</span>
                               <span className="text-[10px] text-gray-400"> {svcUnit}</span>
+                            </div>
+
+                            <div className="relative shrink-0 w-20">
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 pointer-events-none">R$</span>
+                              <input
+                                className="input text-xs pl-6 pr-1 text-right"
+                                type="number" placeholder={svcMoCost || '—'} min="0" step="0.01"
+                                inputMode="decimal"
+                                title="Custo unitário desta sub-área (deixe vazio para usar o custo geral)"
+                                value={m.unit_cost}
+                                onChange={e => setMeas(prev => prev.map(x => x.id === m.id ? { ...x, unit_cost: e.target.value } : x))}
+                              />
                             </div>
 
                             {meas.length > 1 && (
@@ -1219,7 +1823,7 @@ export default function MemoriaCalculoClient({
 
                   {/* Custo MO */}
                   <div>
-                    <label className="label">Custo de mão de obra por {svcUnit}</label>
+                    <label className="label">Custo de mão de obra padrão por {svcUnit} <span className="text-gray-400 font-normal">(geral)</span></label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">R$</span>
                       <input className="input pl-9" type="number" placeholder="0,00" min="0" step="0.01"
@@ -1228,10 +1832,29 @@ export default function MemoriaCalculoClient({
                   </div>
 
                   {/* Preview */}
-                  {totalM2 > 0 && (parseFloat(svcMoCost) || 0) > 0 && (
-                    <div className="bg-blue-50 rounded-xl p-3">
-                      <div className="flex justify-between text-sm font-bold">
-                        <span className="text-gray-700">{totalM2.toFixed(2)} {svcUnit} × {formatCurrency(parseFloat(svcMoCost) || 0)}</span>
+                  {totalM2 > 0 && svcSubtotal > 0 && (
+                    <div className="bg-blue-50 rounded-xl p-3 space-y-1">
+                      {meas.some(m => m.unit_cost) ? (
+                        meas.filter(m => (parseFloat(m.height) || 0) > 0).map(m => {
+                          const area = unitType === 'area'
+                            ? (parseFloat(m.height) || 0) * (parseFloat(m.width) || 0)
+                            : (parseFloat(m.height) || 0)
+                          const cost = parseFloat(m.unit_cost) || parseFloat(svcMoCost) || 0
+                          if (area === 0 || cost === 0) return null
+                          return (
+                            <div key={m.id} className="flex justify-between text-xs text-gray-600">
+                              <span>{m.label || `Sub-área`}: {area.toFixed(1)} {svcUnit} × {formatCurrency(cost)}</span>
+                              <span className="font-semibold">{formatCurrency(area * cost)}</span>
+                            </div>
+                          )
+                        })
+                      ) : (
+                        <div className="flex justify-between text-sm font-bold">
+                          <span className="text-gray-700">{totalM2.toFixed(2)} {svcUnit} × {formatCurrency(parseFloat(svcMoCost) || 0)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm font-bold border-t border-blue-100 pt-1 mt-1">
+                        <span className="text-gray-700">Total</span>
                         <span className="text-blue-700">{formatCurrency(svcSubtotal)}</span>
                       </div>
                     </div>
@@ -1247,6 +1870,57 @@ export default function MemoriaCalculoClient({
               {/* ── Formulário de Material / Equipamento ── */}
               {(modalType === 'material' || modalType === 'equipamento') && (
                 <>
+                  {/* Importar do Mapa de Áreas */}
+                  {areaItems.length > 0 && (
+                    <div className="bg-teal-50 rounded-xl p-3 space-y-2">
+                      <p className="text-xs font-semibold text-teal-700 flex items-center gap-1.5">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 16l4.553-2.276A1 1 0 0021 19.382V8.618a1 1 0 00-.553-.894L15 5m0 14V5m0 0L9 7" /></svg>
+                        Importar área do mapa
+                      </p>
+                      <select
+                        className="input text-sm bg-white w-full"
+                        value={selectedAreaIdSim}
+                        onChange={e => applyAreaToSim(e.target.value)}
+                      >
+                        <option value="">Selecione uma área...</option>
+                        {areaItems.map(a => (
+                          <option key={a.id} value={a.id}>
+                            {a.name} — {a.total_quantity.toFixed(2)} {a.unit}
+                          </option>
+                        ))}
+                      </select>
+
+                      {selectedAreaIdSim && (
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1">
+                            <label className="label text-xs mb-0.5">Rendimento por unidade <span className="text-gray-400 font-normal">(opcional)</span></label>
+                            <div className="relative">
+                              <input
+                                className="input text-sm pr-16"
+                                type="number" placeholder="Ex: 10" min="0.01" step="0.01"
+                                inputMode="decimal"
+                                value={simRendimento}
+                                onChange={e => {
+                                  setSimRendimento(e.target.value)
+                                  const rend = parseFloat(e.target.value)
+                                  if (rend > 0) setSimQty((simAreaTotal / rend).toFixed(2))
+                                  else setSimQty(String(simAreaTotal))
+                                }}
+                              />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
+                                {areaItems.find(a => a.id === selectedAreaIdSim)?.unit ?? 'm²'}/un
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0 pt-4">
+                            <p className="text-[10px] text-teal-600">Qtd calculada</p>
+                            <p className="font-bold text-teal-700 text-sm">{simQty || '—'}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div>
                     <label className="label">{modalType === 'material' ? 'Material' : 'Equipamento'} *</label>
                     <input className="input" placeholder={modalType === 'material' ? 'Ex: Tinta látex 18L' : 'Ex: Andaime'}
