@@ -827,7 +827,7 @@ export default function MemoriaCalculoClient({
   // ---------------------------------------------------------------------------
   return (
     <>
-      <div className="max-w-2xl mx-auto space-y-5 pb-10">
+      <div className="max-w-7xl mx-auto pb-10 space-y-4">
 
         {/* Header */}
         <div className="flex items-center gap-3">
@@ -893,6 +893,12 @@ export default function MemoriaCalculoClient({
           </div>
         )}
 
+        {/* ── GRID PRINCIPAL ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_220px] gap-4 items-start">
+
+        {/* Col 1 — Mapa de Áreas */}
+        <div className="lg:col-start-1 lg:row-start-1">
+
         {/* ── MAPA DE ÁREAS ── */}
         <div className="card overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-3 bg-teal-50 border-b border-teal-100">
@@ -946,6 +952,11 @@ export default function MemoriaCalculoClient({
             </div>
           )}
         </div>
+
+        </div>{/* /col-1-mapa */}
+
+        {/* Col 2 — Serviços / Materiais / Equipamentos */}
+        <div className="lg:col-start-2 lg:row-start-1 space-y-3">
 
         {/* ── Toggle cards / tabela ── */}
         <div className="flex items-center justify-between px-1">
@@ -1085,8 +1096,11 @@ export default function MemoriaCalculoClient({
           )}
         </div>
 
-        {/* ── RESUMO POR ÁREA ── */}
+        </div>{/* /col-2-itens */}
+
+        {/* RESUMO POR ÁREA — full-width row 2 */}
         {resumoPorArea.length > 0 && (
+          <div className="lg:col-span-3 lg:row-start-2">
           <div className="card overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border-b border-slate-100">
               <svg className="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
@@ -1242,8 +1256,11 @@ export default function MemoriaCalculoClient({
               </div>
             </div>
           </div>
+          </div>
         )}
 
+        {/* Col 3 — BDI */}
+        <div className="lg:col-start-3 lg:row-start-1">
         {/* ── BDI ── */}
         <div className="card overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-3 bg-purple-50 border-b border-purple-100">
@@ -1343,8 +1360,10 @@ export default function MemoriaCalculoClient({
             </div>
           )}
         </div>
+        </div>{/* /col-3-bdi */}
 
-        {/* ── Resumo Final ── */}
+        {/* Resumo Final — full-width row 3 */}
+        <div className="lg:col-span-3 lg:row-start-3">
         <div className="card p-4">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Resumo Final</p>
           <div className="space-y-2">
@@ -1374,9 +1393,12 @@ export default function MemoriaCalculoClient({
             </div>
           </div>
         </div>
+        </div>{/* /col-span-3-total */}
 
-        {/* ── Dados Comerciais da Proposta ── */}
-        <div className="card overflow-hidden">
+        </div>{/* /grid-principal */}
+
+        {/* ── Dados Comerciais da Proposta — temporariamente desativado ── */}
+        {false && <div className="card overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50">
             <FileText className="w-4 h-4 text-blue-600" />
             <h3 className="font-semibold text-gray-800 text-sm">Dados Comerciais da Proposta</h3>
@@ -1533,34 +1555,23 @@ export default function MemoriaCalculoClient({
               {detSaving ? 'Salvando...' : detSaved ? 'Dados salvos!' : 'Salvar Dados Comerciais'}
             </button>
           </div>
-        </div>
+        </div>}
 
-        {/* ── Botões finais ── */}
-        <div className="space-y-3 pt-2 pb-4">
-          {/* Gerar Proposta Comercial */}
+        {/* ── Footer ── */}
+        <div className="flex items-center justify-between py-3">
+          {lastSaved ? (
+            <span className="flex items-center gap-1.5 text-sm text-green-600 font-medium">
+              <CheckCircle2 className="w-4 h-4" /> Salvo às {lastSaved}
+            </span>
+          ) : (
+            <span className="text-xs text-gray-400">Itens salvos automaticamente</span>
+          )}
           <button
-            onClick={openGenModal}
-            className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-2xl shadow-sm transition-all text-sm"
+            onClick={() => router.push('/propostas')}
+            className="btn-secondary px-5 py-2 text-sm flex items-center gap-2"
           >
-            <FileText className="w-4 h-4" />
-            Gerar Proposta Comercial
+            <ArrowLeft className="w-4 h-4" /> Voltar
           </button>
-
-          <div className="flex items-center justify-between gap-3">
-            {lastSaved ? (
-              <span className="flex items-center gap-1.5 text-sm text-green-600 font-medium">
-                <CheckCircle2 className="w-4 h-4" /> Salvo às {lastSaved}
-              </span>
-            ) : (
-              <span className="text-xs text-gray-400">Itens salvos automaticamente</span>
-            )}
-            <button
-              onClick={() => router.push('/propostas')}
-              className="btn-secondary px-5 py-2 text-sm flex items-center gap-2"
-            >
-              <Save className="w-4 h-4" /> Concluir
-            </button>
-          </div>
         </div>
       </div>
 
