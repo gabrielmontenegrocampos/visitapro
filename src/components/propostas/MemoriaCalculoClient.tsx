@@ -1117,76 +1117,109 @@ export default function MemoriaCalculoClient({
                       )}
                     </div>
 
-                    {/* Serviços desta área */}
-                    {svcs.length > 0 && (
-                      <div className="ml-4 space-y-1">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-blue-500 mb-1">Serviços</p>
-                        {svcs.map(i => (
-                          <div key={i.id} className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-gray-600 truncate flex-1">{i.service_type ?? i.area_name}</span>
-                            <span className="text-gray-400 shrink-0">{i.quantity.toFixed(2)} {i.unit} × {formatCurrency(i.unit_price)}</span>
-                            <span className="font-semibold text-gray-800 shrink-0 w-24 text-right">{formatCurrency(i.total_price)}</span>
-                          </div>
-                        ))}
-                        <div className="flex justify-between text-xs border-t border-blue-100 pt-1 text-blue-600 font-medium">
-                          <span>Subtotal serviços</span>
-                          <span>{formatCurrency(svcs.reduce((s, i) => s + i.total_price, 0))}</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Materiais desta área */}
-                    {mats.length > 0 && (
-                      <div className="ml-4 space-y-1">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-green-500 mb-1">Materiais</p>
-                        {mats.map(i => (
-                          <div key={i.id} className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-gray-600 truncate flex-1">{i.area_name}</span>
-                            <span className="text-gray-400 shrink-0">{i.quantity.toFixed(2)} {i.unit} × {formatCurrency(i.unit_price)}</span>
-                            <span className="font-semibold text-gray-800 shrink-0 w-24 text-right">{formatCurrency(i.total_price)}</span>
-                          </div>
-                        ))}
-                        <div className="flex justify-between text-xs border-t border-green-100 pt-1 text-green-600 font-medium">
-                          <span>Subtotal materiais</span>
-                          <span>{formatCurrency(mats.reduce((s, i) => s + i.total_price, 0))}</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Equipamentos desta área */}
-                    {equip.length > 0 && (
-                      <div className="ml-4 space-y-1">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-orange-500 mb-1">Equipamentos</p>
-                        {equip.map(i => (
-                          <div key={i.id} className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-gray-600 truncate flex-1">{i.area_name}</span>
-                            <span className="text-gray-400 shrink-0">{i.quantity.toFixed(2)} {i.unit} × {formatCurrency(i.unit_price)}</span>
-                            <span className="font-semibold text-gray-800 shrink-0 w-24 text-right">{formatCurrency(i.total_price)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Custo direto + BDI + Total da área */}
-                    <div className="ml-4 rounded-xl border border-slate-200 overflow-hidden">
-                      <div className="flex justify-between text-xs px-3 py-1.5 bg-white">
-                        <span className="text-gray-500">Custo direto {area.name}</span>
-                        <span className="font-medium text-gray-700">{formatCurrency(total)}</span>
-                      </div>
-                      {areaBdiPct > 0 && (
-                        <div className="flex justify-between text-xs px-3 py-1.5 bg-white border-t border-slate-100">
-                          <span className="text-purple-500 flex items-center gap-1">
-                            <Percent className="w-3 h-3" />
-                            BDI {areaBdiPct.toFixed(1)}%{!hasCustomBdi && <span className="text-gray-400"> (global)</span>}
+                    {/* Helper: preço de um item c/ BDI */}
+                    {(() => {
+                      const withBdi = (p: number) => p * (1 + areaBdiPct / 100)
+                      const ItemRow = ({ label, qty, unit, unitPrice, directTotal }: {
+                        label: string; qty: number; unit: string | null
+                        unitPrice: number; directTotal: number
+                      }) => (
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="text-gray-600 truncate flex-1">{label}</span>
+                          <span className="text-gray-400 shrink-0 hidden sm:inline">
+                            {qty.toFixed(2)} {unit} × {formatCurrency(unitPrice)}
                           </span>
-                          <span className="font-medium text-purple-600">{formatCurrency(areaBdiVal)}</span>
+                          <div className="shrink-0 text-right min-w-[72px]">
+                            <span className="font-bold text-gray-900 block">{formatCurrency(withBdi(directTotal))}</span>
+                            {areaBdiPct > 0 && (
+                              <span className="text-[10px] text-gray-300 block leading-tight">
+                                direto {formatCurrency(directTotal)}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      )}
-                      <div className="flex justify-between px-3 py-2 bg-slate-700">
-                        <span className="text-xs font-bold text-white">Total {area.name}</span>
-                        <span className="font-bold text-white">{formatCurrency(areaFinal)}</span>
-                      </div>
-                    </div>
+                      )
+
+                      return (
+                        <>
+                          {/* Serviços desta área */}
+                          {svcs.length > 0 && (
+                            <div className="ml-4 space-y-1.5">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-blue-500 mb-1 flex items-center gap-1">
+                                Serviços
+                                {areaBdiPct > 0 && <span className="text-purple-400 font-normal normal-case">c/ BDI {areaBdiPct.toFixed(1)}%</span>}
+                              </p>
+                              {svcs.map(i => (
+                                <ItemRow key={i.id}
+                                  label={i.service_type ?? i.area_name ?? ''}
+                                  qty={i.quantity} unit={i.unit}
+                                  unitPrice={i.unit_price} directTotal={i.total_price}
+                                />
+                              ))}
+                              <div className="flex justify-between text-xs border-t border-blue-100 pt-1 text-blue-600 font-semibold">
+                                <span>Subtotal serviços</span>
+                                <span>{formatCurrency(svcs.reduce((s, i) => s + withBdi(i.total_price), 0))}</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Materiais desta área */}
+                          {mats.length > 0 && (
+                            <div className="ml-4 space-y-1.5">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-green-500 mb-1 flex items-center gap-1">
+                                Materiais
+                                {areaBdiPct > 0 && <span className="text-purple-400 font-normal normal-case">c/ BDI {areaBdiPct.toFixed(1)}%</span>}
+                              </p>
+                              {mats.map(i => (
+                                <ItemRow key={i.id}
+                                  label={i.area_name ?? ''}
+                                  qty={i.quantity} unit={i.unit}
+                                  unitPrice={i.unit_price} directTotal={i.total_price}
+                                />
+                              ))}
+                              <div className="flex justify-between text-xs border-t border-green-100 pt-1 text-green-600 font-semibold">
+                                <span>Subtotal materiais</span>
+                                <span>{formatCurrency(mats.reduce((s, i) => s + withBdi(i.total_price), 0))}</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Equipamentos desta área */}
+                          {equip.length > 0 && (
+                            <div className="ml-4 space-y-1.5">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-orange-500 mb-1 flex items-center gap-1">
+                                Equipamentos
+                                {areaBdiPct > 0 && <span className="text-purple-400 font-normal normal-case">c/ BDI {areaBdiPct.toFixed(1)}%</span>}
+                              </p>
+                              {equip.map(i => (
+                                <ItemRow key={i.id}
+                                  label={i.area_name ?? ''}
+                                  qty={i.quantity} unit={i.unit}
+                                  unitPrice={i.unit_price} directTotal={i.total_price}
+                                />
+                              ))}
+                              <div className="flex justify-between text-xs border-t border-orange-100 pt-1 text-orange-600 font-semibold">
+                                <span>Subtotal equipamentos</span>
+                                <span>{formatCurrency(equip.reduce((s, i) => s + withBdi(i.total_price), 0))}</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Total da área */}
+                          <div className="ml-4 flex items-center justify-between px-3 py-2.5 bg-slate-700 rounded-xl">
+                            <div>
+                              <span className="text-xs font-bold text-white">Total {area.name}</span>
+                              {areaBdiPct > 0 && (
+                                <span className="text-[10px] text-slate-400 block">
+                                  direto {formatCurrency(total)} + BDI {areaBdiPct.toFixed(1)}%{!hasCustomBdi ? ' (global)' : ' (próprio)'}
+                                </span>
+                              )}
+                            </div>
+                            <span className="font-bold text-white text-base">{formatCurrency(areaFinal)}</span>
+                          </div>
+                        </>
+                      )
+                    })()}
                   </div>
                 )
               })}
