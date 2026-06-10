@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Plus, Trash2, Pencil, X, Loader2, Save,
   Hammer, Package, Wrench, Percent, CheckCircle2, AlertTriangle,
   FileText, Copy, ExternalLink, Users, BookOpen, ClipboardList,
-  CreditCard, Calendar,
+  CreditCard, Calendar, ChevronRight, LayoutGrid, List,
 } from 'lucide-react'
 import { formatCurrency, PROPOSAL_STATUS_LABELS, PROPOSAL_STATUS_CONFIG } from '@/lib/utils'
 import {
@@ -195,6 +195,26 @@ export default function MemoriaCalculoClient({
   const [lastSaved,     setLastSaved]     = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting,      setDeleting]      = useState(false)
+
+  // Modo de visualização (cards / tabela)
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('proposal-view-mode') as 'cards' | 'table') ?? 'cards'
+    }
+    return 'cards'
+  })
+  function setView(mode: 'cards' | 'table') {
+    setViewMode(mode)
+    localStorage.setItem('proposal-view-mode', mode)
+  }
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  function toggleExpand(id: string) {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   // Modal gerar proposta comercial
   const [showGenModal,     setShowGenModal]     = useState(false)
@@ -655,11 +675,151 @@ export default function MemoriaCalculoClient({
     )
   }
 
-  function SectionHeader({ icon, label, color }: { icon: React.ReactNode; label: string; color: string }) {
+  function SectionHeader({ icon, label, color, count, subtotal, subtotalColor }: {
+    icon: React.ReactNode; label: string; color: string
+    count?: number; subtotal?: number; subtotalColor?: string
+  }) {
     return (
       <div className={`flex items-center gap-2 px-3 py-2 rounded-xl ${color}`}>
         {icon}
-        <span className="text-xs font-bold uppercase tracking-wider">{label}</span>
+        <span className="text-xs font-bold uppercase tracking-wider flex-1">{label}</span>
+        {count != null && count > 0 && subtotal != null && (
+          <span className={`text-xs font-bold tabular-nums ${subtotalColor ?? ''}`}>
+            {formatCurrency(subtotal)}
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  function ItemTableSection({
+    items, sectionType, subtotalColor, subtotalBg, addLabel, addBorderColor, addTextColor, onAdd, emptyText,
+  }: {
+    items: ItemRow[]
+    sectionType: 'servico' | 'material' | 'equipamento'
+    subtotalColor: string; subtotalBg: string
+    addLabel: string; addBorderColor: string; addTextColor: string
+    onAdd: () => void; emptyText: string
+  }) {
+    const isService = sectionType === 'servico'
+
+    return (
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px] text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50/60">
+                {isService && <th className="w-7 px-2 py-2" />}
+                <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 whitespace-nowrap">
+                  {isService ? 'Área' : 'Item'}
+                </th>
+                <th className="text-left px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 whitespace-nowrap">
+                  {isService ? 'Serviço' : 'Ref. área'}
+                </th>
+                <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 whitespace-nowrap">Qtd</th>
+                <th className="text-right px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 whitespace-nowrap">Un</th>
+                <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 whitespace-nowrap">R$/un</th>
+                <th className="text-right px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 whitespace-nowrap">Total</th>
+                <th className="w-16 px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {items.length === 0 && (
+                <tr>
+                  <td colSpan={isService ? 8 : 7} className="text-center py-6 text-xs text-gray-400">{emptyText}</td>
+                </tr>
+              )}
+              {items.map(item => {
+                const hasMeas = isService && (item.measurements?.length ?? 0) > 0
+                const isExpanded = expandedRows.has(item.id)
+                return (
+                  <Fragment key={item.id}>
+                    <tr className={`hover:bg-gray-50/80 group transition-colors ${deletingId === item.id ? 'opacity-40' : ''}`}>
+                      {isService && (
+                        <td className="px-2 py-2.5 text-center w-7">
+                          {hasMeas ? (
+                            <button
+                              onClick={() => toggleExpand(item.id)}
+                              className="p-0.5 hover:bg-gray-200 rounded transition-colors"
+                            >
+                              <ChevronRight className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`} />
+                            </button>
+                          ) : <span className="w-4 inline-block" />}
+                        </td>
+                      )}
+                      <td className="px-4 py-2.5">
+                        <span className="font-semibold text-gray-800 text-sm leading-tight">{item.area_name}</span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {isService
+                          ? <span className="text-xs text-blue-600 font-medium">{item.service_type}</span>
+                          : <span className="text-xs text-teal-600">{item.service_type ?? <span className="text-gray-300">—</span>}</span>
+                        }
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-sm text-gray-700 tabular-nums">{item.quantity.toFixed(2)}</td>
+                      <td className="px-3 py-2.5 text-right text-xs text-gray-400">{item.unit}</td>
+                      <td className="px-4 py-2.5 text-right text-sm text-gray-600 tabular-nums">{formatCurrency(item.unit_price)}</td>
+                      <td className="px-4 py-2.5 text-right font-bold text-gray-900 tabular-nums">{formatCurrency(item.total_price)}</td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex gap-1 justify-end opacity-30 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => openEdit(item)} className="p-1 hover:bg-gray-100 rounded-lg">
+                            <Pencil className="w-3.5 h-3.5 text-gray-400" />
+                          </button>
+                          <button onClick={() => handleDeleteItem(item)} className="p-1 hover:bg-red-50 rounded-lg">
+                            <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {isService && isExpanded && item.measurements?.map(m => {
+                      const area = (m.height || 0) * (m.width || 0)
+                      return (
+                        <tr key={m.id} className="bg-blue-50/30 text-xs text-gray-400">
+                          <td className="px-2 py-1.5 border-l-2 border-blue-200" />
+                          <td className="px-4 py-1.5 pl-7 text-gray-500" colSpan={2}>
+                            <span className="text-gray-300 mr-1.5">↳</span>
+                            <span className="italic">{m.label || 'Trecho'}</span>
+                            <span className="ml-2 text-gray-300">{m.height}m × {m.width}m</span>
+                          </td>
+                          <td className="px-4 py-1.5 text-right font-medium text-gray-500 tabular-nums">{area.toFixed(2)}</td>
+                          <td className="px-3 py-1.5 text-right text-gray-400">{item.unit}</td>
+                          <td className="px-4 py-1.5 text-right tabular-nums">
+                            {m.unit_cost ? formatCurrency(m.unit_cost) : <span className="text-gray-200">—</span>}
+                          </td>
+                          <td className="px-4 py-1.5 text-right font-medium text-gray-500 tabular-nums">
+                            {m.unit_cost ? formatCurrency(m.unit_cost * area) : <span className="text-gray-200">—</span>}
+                          </td>
+                          <td />
+                        </tr>
+                      )
+                    })}
+                  </Fragment>
+                )
+              })}
+            </tbody>
+            {items.length > 0 && (
+              <tfoot>
+                <tr className={`border-t-2 border-gray-100 ${subtotalBg}`}>
+                  <td colSpan={isService ? 6 : 5} className={`px-4 py-2 text-xs font-semibold text-right ${subtotalColor}`}>
+                    Subtotal
+                  </td>
+                  <td className={`px-4 py-2 text-right font-bold text-sm ${subtotalColor} tabular-nums`}>
+                    {formatCurrency(items.reduce((s, i) => s + i.total_price, 0))}
+                  </td>
+                  <td className="px-3 py-2" />
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+        <div className="border-t border-dashed border-gray-100">
+          <button
+            onClick={onAdd}
+            className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors ${addTextColor} hover:opacity-80`}
+          >
+            <Plus className="w-4 h-4" /> {addLabel}
+          </button>
+        </div>
       </div>
     )
   }
@@ -787,52 +947,142 @@ export default function MemoriaCalculoClient({
           )}
         </div>
 
+        {/* ── Toggle cards / tabela ── */}
+        <div className="flex items-center justify-between px-1">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Itens do orçamento</span>
+          <div className="flex items-center gap-0.5 bg-gray-100 p-0.5 rounded-lg">
+            <button
+              onClick={() => setView('cards')}
+              title="Visualização em cards"
+              className={`p-1.5 rounded-md transition-colors ${viewMode === 'cards' ? 'bg-white shadow-sm text-gray-700' : 'text-gray-400 hover:bg-gray-200'}`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setView('table')}
+              title="Visualização em tabela"
+              className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white shadow-sm text-gray-700' : 'text-gray-400 hover:bg-gray-200'}`}
+            >
+              <List className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
         {/* ── SERVIÇOS ── */}
         <div className="space-y-2">
-          <SectionHeader icon={<Hammer className="w-3.5 h-3.5 text-blue-700" />} label="Serviços / Mão de Obra" color="bg-blue-50 text-blue-700" />
-          {serviceItems.map(item => <ItemCard key={item.id} item={item} />)}
-          {serviceItems.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Nenhum serviço adicionado</p>}
-          {serviceItems.length > 0 && (
-            <div className="flex items-center justify-between px-3 py-2 bg-blue-50 rounded-xl">
-              <span className="text-xs font-semibold text-blue-700">Subtotal Serviços</span>
-              <span className="font-bold text-blue-700 text-sm">{formatCurrency(serviceItems.reduce((s, i) => s + i.total_price, 0))}</span>
-            </div>
+          <SectionHeader
+            icon={<Hammer className="w-3.5 h-3.5 text-blue-700" />}
+            label="Serviços / Mão de Obra"
+            color="bg-blue-50 text-blue-700"
+            count={serviceItems.length}
+            subtotal={serviceItems.reduce((s, i) => s + i.total_price, 0)}
+            subtotalColor="text-blue-700"
+          />
+          {viewMode === 'cards' ? (
+            <>
+              {serviceItems.map(item => <ItemCard key={item.id} item={item} />)}
+              {serviceItems.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Nenhum serviço adicionado</p>}
+              {serviceItems.length > 0 && (
+                <div className="flex items-center justify-between px-3 py-2 bg-blue-50 rounded-xl">
+                  <span className="text-xs font-semibold text-blue-700">Subtotal Serviços</span>
+                  <span className="font-bold text-blue-700 text-sm">{formatCurrency(serviceItems.reduce((s, i) => s + i.total_price, 0))}</span>
+                </div>
+              )}
+              <button onClick={openAddService} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-blue-200 rounded-xl text-sm text-blue-500 hover:bg-blue-50 transition-all">
+                <Plus className="w-4 h-4" /> Adicionar serviço
+              </button>
+            </>
+          ) : (
+            <ItemTableSection
+              items={serviceItems}
+              sectionType="servico"
+              subtotalColor="text-blue-700"
+              subtotalBg="bg-blue-50"
+              addLabel="Adicionar serviço"
+              addBorderColor="border-blue-200"
+              addTextColor="text-blue-500"
+              onAdd={openAddService}
+              emptyText="Nenhum serviço adicionado"
+            />
           )}
-          <button onClick={openAddService} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-blue-200 rounded-xl text-sm text-blue-500 hover:bg-blue-50 transition-all">
-            <Plus className="w-4 h-4" /> Adicionar serviço
-          </button>
         </div>
 
         {/* ── MATERIAIS ── */}
         <div className="space-y-2">
-          <SectionHeader icon={<Package className="w-3.5 h-3.5 text-green-700" />} label="Materiais" color="bg-green-50 text-green-700" />
-          {materialItems.map(item => <ItemCard key={item.id} item={item} />)}
-          {materialItems.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Nenhum material adicionado</p>}
-          {materialItems.length > 0 && (
-            <div className="flex items-center justify-between px-3 py-2 bg-green-50 rounded-xl">
-              <span className="text-xs font-semibold text-green-700">Subtotal Materiais</span>
-              <span className="font-bold text-green-700 text-sm">{formatCurrency(materialItems.reduce((s, i) => s + i.total_price, 0))}</span>
-            </div>
+          <SectionHeader
+            icon={<Package className="w-3.5 h-3.5 text-green-700" />}
+            label="Materiais"
+            color="bg-green-50 text-green-700"
+            count={materialItems.length}
+            subtotal={materialItems.reduce((s, i) => s + i.total_price, 0)}
+            subtotalColor="text-green-700"
+          />
+          {viewMode === 'cards' ? (
+            <>
+              {materialItems.map(item => <ItemCard key={item.id} item={item} />)}
+              {materialItems.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Nenhum material adicionado</p>}
+              {materialItems.length > 0 && (
+                <div className="flex items-center justify-between px-3 py-2 bg-green-50 rounded-xl">
+                  <span className="text-xs font-semibold text-green-700">Subtotal Materiais</span>
+                  <span className="font-bold text-green-700 text-sm">{formatCurrency(materialItems.reduce((s, i) => s + i.total_price, 0))}</span>
+                </div>
+              )}
+              <button onClick={() => openAddSimple('material')} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-green-200 rounded-xl text-sm text-green-600 hover:bg-green-50 transition-all">
+                <Plus className="w-4 h-4" /> Adicionar material
+              </button>
+            </>
+          ) : (
+            <ItemTableSection
+              items={materialItems}
+              sectionType="material"
+              subtotalColor="text-green-700"
+              subtotalBg="bg-green-50"
+              addLabel="Adicionar material"
+              addBorderColor="border-green-200"
+              addTextColor="text-green-600"
+              onAdd={() => openAddSimple('material')}
+              emptyText="Nenhum material adicionado"
+            />
           )}
-          <button onClick={() => openAddSimple('material')} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-green-200 rounded-xl text-sm text-green-600 hover:bg-green-50 transition-all">
-            <Plus className="w-4 h-4" /> Adicionar material
-          </button>
         </div>
 
         {/* ── EQUIPAMENTOS ── */}
         <div className="space-y-2">
-          <SectionHeader icon={<Wrench className="w-3.5 h-3.5 text-orange-700" />} label="Equipamentos" color="bg-orange-50 text-orange-700" />
-          {equipItems.map(item => <ItemCard key={item.id} item={item} />)}
-          {equipItems.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Nenhum equipamento adicionado</p>}
-          {equipItems.length > 0 && (
-            <div className="flex items-center justify-between px-3 py-2 bg-orange-50 rounded-xl">
-              <span className="text-xs font-semibold text-orange-700">Subtotal Equipamentos</span>
-              <span className="font-bold text-orange-700 text-sm">{formatCurrency(equipItems.reduce((s, i) => s + i.total_price, 0))}</span>
-            </div>
+          <SectionHeader
+            icon={<Wrench className="w-3.5 h-3.5 text-orange-700" />}
+            label="Equipamentos"
+            color="bg-orange-50 text-orange-700"
+            count={equipItems.length}
+            subtotal={equipItems.reduce((s, i) => s + i.total_price, 0)}
+            subtotalColor="text-orange-700"
+          />
+          {viewMode === 'cards' ? (
+            <>
+              {equipItems.map(item => <ItemCard key={item.id} item={item} />)}
+              {equipItems.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Nenhum equipamento adicionado</p>}
+              {equipItems.length > 0 && (
+                <div className="flex items-center justify-between px-3 py-2 bg-orange-50 rounded-xl">
+                  <span className="text-xs font-semibold text-orange-700">Subtotal Equipamentos</span>
+                  <span className="font-bold text-orange-700 text-sm">{formatCurrency(equipItems.reduce((s, i) => s + i.total_price, 0))}</span>
+                </div>
+              )}
+              <button onClick={() => openAddSimple('equipamento')} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-orange-200 rounded-xl text-sm text-orange-600 hover:bg-orange-50 transition-all">
+                <Plus className="w-4 h-4" /> Adicionar equipamento
+              </button>
+            </>
+          ) : (
+            <ItemTableSection
+              items={equipItems}
+              sectionType="equipamento"
+              subtotalColor="text-orange-700"
+              subtotalBg="bg-orange-50"
+              addLabel="Adicionar equipamento"
+              addBorderColor="border-orange-200"
+              addTextColor="text-orange-600"
+              onAdd={() => openAddSimple('equipamento')}
+              emptyText="Nenhum equipamento adicionado"
+            />
           )}
-          <button onClick={() => openAddSimple('equipamento')} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-orange-200 rounded-xl text-sm text-orange-600 hover:bg-orange-50 transition-all">
-            <Plus className="w-4 h-4" /> Adicionar equipamento
-          </button>
         </div>
 
         {/* ── RESUMO POR ÁREA ── */}
