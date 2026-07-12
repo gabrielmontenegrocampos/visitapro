@@ -4,6 +4,7 @@ import type { DashboardMetrics } from '@/types/database'
 
 interface MetricsCardsProps {
   metrics: DashboardMetrics | null
+  periodo?: string
 }
 
 const colorConfig: Record<string, {
@@ -62,21 +63,24 @@ const colorConfig: Record<string, {
   },
 }
 
-export default function MetricsCards({ metrics }: MetricsCardsProps) {
+export default function MetricsCards({ metrics, periodo }: MetricsCardsProps) {
   const m = metrics ?? {
     total_leads: 0, propostas_enviadas: 0, propostas_fechadas: 0,
     propostas_recusadas: 0, valor_fechado: 0, valor_pipeline: 0,
     visitas_agendadas: 0, leads_mes_atual: 0,
   }
 
+  const subNovosLeads = periodo ? `em ${periodo}` : 'mês atual'
+  const subTotalLeads = periodo ? `${m.leads_mes_atual} em ${periodo}` : `${m.leads_mes_atual} este mês`
+
   const cards = [
-    { label: 'Total de Leads',       value: m.total_leads,           icon: Users,       color: 'blue',    sub: `${m.leads_mes_atual} este mês` },
+    { label: 'Total de Leads',       value: m.total_leads,           icon: Users,       color: 'blue',    sub: subTotalLeads },
     { label: 'Propostas Enviadas',   value: m.propostas_enviadas,    icon: FileText,    color: 'purple',  sub: `${formatCurrency(m.valor_pipeline)} pipeline` },
     { label: 'Contratos Fechados',   value: m.propostas_fechadas,    icon: CheckCircle, color: 'green',   sub: `${formatCurrency(m.valor_fechado)} faturado` },
     { label: 'Propostas Recusadas',  value: m.propostas_recusadas,   icon: XCircle,     color: 'red',     sub: 'neste período' },
     { label: 'Valor Faturado',       value: formatCurrency(m.valor_fechado),  icon: DollarSign, color: 'emerald', sub: 'contratos fechados', isText: true },
     { label: 'Visitas Agendadas',    value: m.visitas_agendadas,     icon: Calendar,    color: 'orange',  sub: 'próximas visitas' },
-    { label: 'Novos Leads',          value: m.leads_mes_atual,       icon: UserPlus,    color: 'cyan',    sub: 'mês atual' },
+    { label: 'Novos Leads',          value: m.leads_mes_atual,       icon: UserPlus,    color: 'cyan',    sub: subNovosLeads },
     { label: 'Valor Pipeline',       value: formatCurrency(m.valor_pipeline), icon: TrendingUp, color: 'indigo',  sub: 'propostas em aberto', isText: true },
   ]
 

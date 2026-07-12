@@ -1,29 +1,38 @@
 import { createClient } from '@/lib/supabase/server'
-import MetricsCards from '@/components/dashboard/MetricsCards'
-import PipelineChart from '@/components/dashboard/PipelineChart'
-import UpcomingVisits from '@/components/dashboard/UpcomingVisits'
+import { createClient as adminCreate } from '@supabase/supabase-js'
+import DashboardClient from '@/components/dashboard/DashboardClient'
+import { getDashboardMetrics } from './actions'
 
 export const dynamic = 'force-dynamic'
 
+function adminClient() {
+  return adminCreate(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
+
 export default async function DashboardPage() {
   const supabase = await createClient()
+  const admin = adminClient()
 
-  const [metricsRes, stagesRes, visitsRes, leadsRes] = await Promise.all([
-    supabase.from('dashboard_metrics').select('*').single(),
-    supabase.from('pipeline_stages').select('id, name, color, slug').order('position'),
+  const [initialMetrics, stagesRes, visitsRes, leadsRes] = await Promise.all([
+    getDashboardMetrics(),
+    admin.from('pipeline_stages').select('id, name, color, slug').order('position'),
     supabase
       .from('visits')
       .select(`
         id, title, scheduled_at, duration_minutes, status,
         address, notes, assigned_to, lead_id,
-        leads(id, name, phone, address),
+        leads(id, name, company, phone, address),
         profiles!visits_assigned_to_fkey(id, full_name)
       `)
       .gte('scheduled_at', new Date().toISOString())
       .in('status', ['agendada', 'reagendada'])
       .order('scheduled_at')
       .limit(10),
-    supabase.from('leads').select('stage_id'),
+    admin.from('leads').select('stage_id'),
   ])
 
   const stages = stagesRes.data ?? []
@@ -31,25 +40,16 @@ export default async function DashboardPage() {
     if (l.stage_id) acc[l.stage_id] = (acc[l.stage_id] ?? 0) + 1
     return acc
   }, {})
-  const stageCountsRes = stages.map((stage: { id: string; name: string; color: string; slug: string }) => ({
+  const stageCounts = stages.map((stage: { id: string; name: string; color: string; slug: string }) => ({
     ...stage,
     count: countByStage[stage.id] ?? 0,
   }))
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 text-sm mt-1">Visão geral do seu CRM</p>
-      </div>
-
-      <MetricsCards metrics={metricsRes.data} />
-
-      {/* Visitas em destaque no topo */}
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <UpcomingVisits visits={(visitsRes.data ?? []) as any} />
-
-      <PipelineChart stages={stageCountsRes} />
-    </div>
+    <DashboardClient
+      initialMetrics={initialMetrics as any}
+      stages={stageCounts}
+      visits={(visitsRes.data ?? []) as any}
+    />
   )
 }
