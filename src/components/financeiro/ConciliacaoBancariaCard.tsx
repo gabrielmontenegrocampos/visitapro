@@ -11,12 +11,27 @@ function fmtDate(s: string | null) {
   if (!s) return '—'
   return new Date(s + 'T12:00:00').toLocaleDateString('pt-BR')
 }
+// Converte string digitada pelo usuário para número
+// Suporta: "19874" → 19874 | "19.874,50" → 19874.5 | "19874,50" → 19874.5
 function parseBRL(s: string): number {
-  return Number(s.replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')) || 0
+  const clean = s.replace(/R\$\s*/g, '').trim()
+  if (clean.includes(',')) {
+    return parseFloat(clean.replace(/\./g, '').replace(',', '.')) || 0
+  }
+  return parseFloat(clean.replace(/[^\d.-]/g, '')) || 0
 }
-function fmtInput(v: number | null) {
-  if (v == null) return ''
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// Formata número para exibição no input (ex: 19874.5 → "19.874,50")
+function fmtInput(v: number | null): string {
+  if (v == null || isNaN(Number(v))) return ''
+  return Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+// Aplica máscara enquanto o usuário digita (só dígitos e separadores)
+function maskBRL(raw: string): string {
+  // Remove tudo que não seja dígito
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return ''
+  const num = parseInt(digits, 10) / 100
+  return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 interface SaldoConfig {
@@ -50,8 +65,8 @@ export default function ConciliacaoBancariaCard({ config: initialConfig, lancame
   const [bancoData, setBancoData]   = useState(initialConfig.saldo_banco_data ?? new Date().toISOString().slice(0, 10))
 
   // Inicial — edição
-  const [inicialValor, setInicialValor] = useState(fmtInput(initialConfig.saldo_inicial))
-  const [inicialData, setInicialData]   = useState(initialConfig.saldo_inicial_data)
+  const [inicialValor, setInicialValor] = useState(fmtInput(initialConfig.saldo_inicial ?? 0))
+  const [inicialData, setInicialData]   = useState(initialConfig.saldo_inicial_data ?? new Date().toISOString().slice(0, 10))
 
   // Saldo sistema = saldo_inicial + receitas pagas desde data inicial - despesas pagas desde data inicial
   const saldoSistema = useMemo(() => {
@@ -192,12 +207,12 @@ export default function ConciliacaoBancariaCard({ config: initialConfig, lancame
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
                 <input
                   type="text"
-                  inputMode="decimal"
+                  inputMode="numeric"
                   value={bancoValor}
-                  onChange={e => setBancoValor(e.target.value)}
+                  onChange={e => setBancoValor(maskBRL(e.target.value))}
                   onKeyDown={handleBancoValorKey}
                   placeholder="0,00"
-                  className="pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-40"
+                  className="pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-44 tabular-nums"
                 />
               </div>
               <span className="text-xs text-gray-400">em</span>
@@ -246,11 +261,11 @@ export default function ConciliacaoBancariaCard({ config: initialConfig, lancame
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
                     <input
                       type="text"
-                      inputMode="decimal"
+                      inputMode="numeric"
                       value={inicialValor}
-                      onChange={e => setInicialValor(e.target.value)}
+                      onChange={e => setInicialValor(maskBRL(e.target.value))}
                       placeholder="0,00"
-                      className="pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-40"
+                      className="pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-44 tabular-nums"
                     />
                   </div>
                   <button
