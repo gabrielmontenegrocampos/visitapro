@@ -34,6 +34,7 @@ export interface Database {
         Row: {
           id: string
           name: string
+          company: string | null
           email: string | null
           phone: string | null
           cep: string | null
@@ -42,7 +43,7 @@ export interface Database {
           complement: string | null
           city: string | null
           neighborhood: string | null
-          source: 'google_ads' | 'indicacao' | 'site' | 'telefone' | 'outro'
+          source: 'google_ads' | 'indicacao' | 'facebook' | 'site' | 'telefone' | 'outro'
           stage_id: string | null
           assigned_to: string | null
           notes: string | null
@@ -150,6 +151,10 @@ export interface Database {
           closing_message: string | null
           closing_photo_url: string | null
           client_refs: Array<{ id: string; name: string; company: string; phone: string }> | null
+          saldo_inicial: number | null
+          saldo_inicial_data: string | null
+          saldo_banco_real: number | null
+          saldo_banco_data: string | null
           created_at: string
           updated_at: string
         }

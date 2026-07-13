@@ -23,7 +23,7 @@ export async function getCompanySettings(): Promise<CompanySettings | null> {
 }
 
 export async function saveCompanySettings(
-  settings: Omit<CompanySettings, 'id' | 'created_at' | 'updated_at'>
+  settings: Partial<Omit<CompanySettings, 'id' | 'created_at' | 'updated_at'>>
 ) {
   const admin = adminClient()
 

@@ -69,6 +69,49 @@ export async function deleteCategoria(id: string) {
   return { error: null }
 }
 
+/**
+ * Remove categorias duplicadas (mesmo nome + tipo + divisão),
+ * mantendo apenas a mais antiga de cada grupo.
+ * Retorna o número de duplicatas removidas.
+ */
+export async function deduplicarCategorias(): Promise<{ removidas: number; error: string | null }> {
+  const admin = adminClient()
+
+  // Busca todas as categorias ativas
+  const { data, error } = await admin
+    .from('categorias_financeiras')
+    .select('id, nome, tipo, divisao, created_at')
+    .eq('ativo', true)
+    .order('created_at', { ascending: true })
+
+  if (error || !data) return { removidas: 0, error: error?.message ?? 'Erro ao buscar categorias' }
+
+  // Agrupa por (nome.toLowerCase(), tipo, divisao), mantém o primeiro (mais antigo)
+  const vistas = new Map<string, string>() // chave → id do vencedor
+  const idsParaRemover: string[] = []
+
+  for (const c of data) {
+    const chave = `${c.nome.trim().toLowerCase()}|${c.tipo}|${c.divisao}`
+    if (vistas.has(chave)) {
+      idsParaRemover.push(c.id) // este é duplicata
+    } else {
+      vistas.set(chave, c.id)
+    }
+  }
+
+  if (idsParaRemover.length === 0) return { removidas: 0, error: null }
+
+  const { error: delError } = await admin
+    .from('categorias_financeiras')
+    .update({ ativo: false })
+    .in('id', idsParaRemover)
+
+  if (delError) return { removidas: 0, error: delError.message }
+
+  revalidatePath('/financeiro')
+  return { removidas: idsParaRemover.length, error: null }
+}
+
 // ─── Lançamentos ───────────────────────────────────────────────
 
 export async function getLancamentos(filters?: {
@@ -79,24 +122,52 @@ export async function getLancamentos(filters?: {
   dataFim?: string
 }) {
   const admin = adminClient()
-  let q = admin
-    .from('lancamentos_financeiros')
-    .select(`
-      *,
-      categorias_financeiras(id, nome, tipo, divisao)
-    `)
-    .order('data', { ascending: false })
-    .order('created_at', { ascending: false })
 
-  if (filters?.divisao) q = q.eq('divisao', filters.divisao)
-  if (filters?.tipo) q = q.eq('tipo', filters.tipo)
-  if (filters?.status) q = q.eq('status', filters.status)
-  if (filters?.dataInicio) q = q.gte('data', filters.dataInicio)
-  if (filters?.dataFim) q = q.lte('data', filters.dataFim)
+  function buildQuery(withProfissionais: boolean) {
+    let q = admin
+      .from('lancamentos_financeiros')
+      .select(`
+        *,
+        categorias_financeiras(id, nome, tipo, divisao),
+        projetos_diario(id, titulo_publico, proposals(title, leads(name, company)))
+        ${withProfissionais ? ', profissionais(id, nome)' : ''}
+      `)
+      .order('data', { ascending: false })
+      .order('created_at', { ascending: false })
 
-  const { data, error } = await q
-  if (error) console.error('[getLancamentos] erro:', error.message, error.details)
-  return data ?? []
+    if (filters?.divisao) q = q.eq('divisao', filters.divisao)
+    if (filters?.tipo) q = q.eq('tipo', filters.tipo)
+    if (filters?.status) q = q.eq('status', filters.status)
+    if (filters?.dataInicio) q = q.gte('data', filters.dataInicio)
+    if (filters?.dataFim) q = q.lte('data', filters.dataFim)
+    return q
+  }
+
+  let { data, error } = await buildQuery(true)
+
+  // O cache de relacionamentos do PostgREST pode demorar a reconhecer a FK
+  // de profissionais recém-criada — nesse caso, refaz a busca sem o join em
+  // vez de devolver a lista inteira vazia.
+  if (error) {
+    console.error('[getLancamentos] erro com join profissionais, tentando sem:', error.message, error.details)
+    const retry = await buildQuery(false)
+    data = retry.data
+    error = retry.error
+    if (error) console.error('[getLancamentos] erro:', error.message, error.details)
+  }
+
+  return (data ?? []).map((l: any) => ({
+    ...l,
+    projetos_diario: l.projetos_diario ? {
+      id: l.projetos_diario.id,
+      nome:
+        l.projetos_diario.titulo_publico ||
+        l.projetos_diario.proposals?.leads?.company ||
+        l.projetos_diario.proposals?.leads?.name ||
+        l.projetos_diario.proposals?.title ||
+        'Projeto sem nome',
+    } : null,
+  }))
 }
 
 export async function createLancamento(input: {
@@ -108,9 +179,13 @@ export async function createLancamento(input: {
   data: string
   status: 'pendente' | 'pago' | 'cancelado'
   projeto_id?: string | null
+  profissional_id?: string | null
   observacoes?: string | null
   recorrente?: boolean
   recorrenciaMeses?: number
+  /** Data de início das parcelas (quando diferente de `data`).
+   *  Quando fornecida, as descrições são numeradas: "Parcela X/N — {descricao}" */
+  dataInicioParcelas?: string
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -125,22 +200,29 @@ export async function createLancamento(input: {
     valor: input.valor,
     status: input.status,
     projeto_id: input.projeto_id ?? null,
+    profissional_id: input.profissional_id ?? null,
     observacoes: input.observacoes ?? null,
     created_by: user.id,
   }
 
-  if (input.recorrente && input.recorrenciaMeses && input.recorrenciaMeses > 1) {
-    // Gera ID de grupo para identificar a série
+  if (input.recorrente && input.recorrenciaMeses && input.recorrenciaMeses >= 1) {
     const grupoId = crypto.randomUUID()
+    const total = input.recorrenciaMeses
+    const usarDataInicio = input.dataInicioParcelas || input.data
     const rows = []
-    for (let i = 0; i < input.recorrenciaMeses; i++) {
-      const d = new Date(input.data + 'T12:00:00')
+
+    for (let i = 0; i < total; i++) {
+      const d = new Date(usarDataInicio + 'T12:00:00')
       d.setMonth(d.getMonth() + i)
+      // Quando dataInicioParcelas estiver definida, numera as parcelas automaticamente
+      const descricao = input.dataInicioParcelas
+        ? `Parcela ${i + 1}/${total} — ${input.descricao}`
+        : input.descricao
       rows.push({
         ...base,
+        descricao,
         data: d.toISOString().split('T')[0],
-        // Primeiro mês mantém o status escolhido; os demais ficam pendentes
-        status: i === 0 ? input.status : 'pendente',
+        status: 'pendente',
         recorrencia_grupo_id: grupoId,
         recorrencia_mes: i + 1,
       })
@@ -158,6 +240,31 @@ export async function createLancamento(input: {
   revalidatePath('/financeiro')
   revalidatePath('/financeiro/lancamentos')
   return { error: null }
+}
+
+/**
+ * Garante que a categoria "Parcelamento de obra" existe.
+ * Retorna o id da categoria.
+ */
+export async function garantirCategoriaParcelamento(): Promise<string | null> {
+  const admin = adminClient()
+  const nome = 'Parcelamento de obra'
+  const { data: existing } = await admin
+    .from('categorias_financeiras')
+    .select('id')
+    .eq('nome', nome)
+    .eq('tipo', 'receita')
+    .eq('divisao', 'obra')
+    .eq('ativo', true)
+    .maybeSingle()
+  if (existing) return existing.id
+  const { data: created } = await admin
+    .from('categorias_financeiras')
+    .insert({ nome, tipo: 'receita', divisao: 'obra', ativo: true })
+    .select('id')
+    .single()
+  if (created) revalidatePath('/financeiro')
+  return created?.id ?? null
 }
 
 export async function cancelarRecorrencia(grupoId: string) {
@@ -184,6 +291,7 @@ export async function updateLancamento(id: string, input: {
   data?: string
   status?: 'pendente' | 'pago' | 'cancelado'
   projeto_id?: string | null
+  profissional_id?: string | null
   observacoes?: string | null
 }) {
   const admin = adminClient()
@@ -343,7 +451,7 @@ export async function getResultadoObra(projetoId: string) {
   // Projeto + proposta vinculada
   const { data: projetoRaw } = await admin
     .from('projetos_diario')
-    .select('id, titulo_publico, proposal_id, proposals(id, title, value, status, leads(id, name, phone))')
+    .select('id, titulo_publico, proposal_id, proposals(id, title, value, status, leads(id, name, company, phone))')
     .eq('id', projetoId)
     .single()
 
@@ -353,17 +461,28 @@ export async function getResultadoObra(projetoId: string) {
   const projeto = {
     ...projetoRaw,
     nome: (projetoRaw as any).titulo_publico
+      || (projetoRaw as any).proposals?.leads?.company
       || (projetoRaw as any).proposals?.leads?.name
       || (projetoRaw as any).proposals?.title
       || 'Projeto sem nome',
   }
 
   // Lançamentos da obra
-  const { data: lancamentos } = await admin
+  let { data: lancamentos, error: lancError } = await admin
     .from('lancamentos_financeiros')
-    .select('*, categorias_financeiras(id, nome, tipo, divisao), profiles!created_by(id, full_name)')
+    .select('*, categorias_financeiras(id, nome, tipo, divisao), profissionais(id, nome), profiles!created_by(id, full_name)')
     .eq('projeto_id', projetoId)
     .order('data', { ascending: false })
+
+  // Mesma proteção contra cache de relacionamento do PostgREST ainda não atualizado
+  if (lancError) {
+    const retry = await admin
+      .from('lancamentos_financeiros')
+      .select('*, categorias_financeiras(id, nome, tipo, divisao), profiles!created_by(id, full_name)')
+      .eq('projeto_id', projetoId)
+      .order('data', { ascending: false })
+    lancamentos = retry.data
+  }
 
   const todos = (lancamentos ?? []) as any[]
   const pagos = todos.filter((l: any) => l.status !== 'cancelado')
@@ -420,11 +539,60 @@ export async function getProjetosParaLancamento() {
   const admin = adminClient()
   const { data } = await admin
     .from('projetos_diario')
-    .select('id, titulo_publico, proposal_id, proposals(id, title, value, status, leads(id, name))')
+    .select('id, titulo_publico, proposal_id, proposals(id, title, value, status, leads(id, name, company))')
     .order('created_at', { ascending: false })
-  // Deriva o campo `nome` a partir de titulo_publico ou nome do lead/proposta
+  // Deriva o campo `nome` a partir de titulo_publico, empresa/condomínio, nome do lead ou da proposta
   return (data ?? []).map((p: any) => ({
     ...p,
-    nome: p.titulo_publico || p.proposals?.leads?.name || p.proposals?.title || 'Projeto sem nome',
+    nome: p.titulo_publico || p.proposals?.leads?.company || p.proposals?.leads?.name || p.proposals?.title || 'Projeto sem nome',
   })) as any[]
+}
+
+// ─── Conciliação Bancária ──────────────────────────────────────
+
+export async function getSaldoConciliacao() {
+  const admin = adminClient()
+  const { data } = await admin
+    .from('company_settings')
+    .select('saldo_inicial, saldo_inicial_data, saldo_banco_real, saldo_banco_data')
+    .limit(1)
+    .maybeSingle()
+  return {
+    saldo_inicial:      Number(data?.saldo_inicial      ?? 0),
+    saldo_inicial_data: data?.saldo_inicial_data        ?? new Date().toISOString().slice(0, 10),
+    saldo_banco_real:   data?.saldo_banco_real != null  ? Number(data.saldo_banco_real) : null,
+    saldo_banco_data:   data?.saldo_banco_data          ?? null,
+  }
+}
+
+export async function updateSaldoConciliacao(input: {
+  saldo_inicial?: number
+  saldo_inicial_data?: string
+  saldo_banco_real?: number
+  saldo_banco_data?: string
+}) {
+  const admin = adminClient()
+  const { data: existing } = await admin
+    .from('company_settings')
+    .select('id')
+    .limit(1)
+    .maybeSingle()
+
+  const payload = {
+    ...(input.saldo_inicial      != null && { saldo_inicial:      input.saldo_inicial      }),
+    ...(input.saldo_inicial_data != null && { saldo_inicial_data: input.saldo_inicial_data }),
+    ...(input.saldo_banco_real   != null && { saldo_banco_real:   input.saldo_banco_real   }),
+    ...(input.saldo_banco_data   != null && { saldo_banco_data:   input.saldo_banco_data   }),
+    updated_at: new Date().toISOString(),
+  }
+
+  let error
+  if (existing?.id) {
+    ;({ error } = await admin.from('company_settings').update(payload).eq('id', existing.id))
+  } else {
+    ;({ error } = await admin.from('company_settings').insert(payload))
+  }
+
+  revalidatePath('/financeiro')
+  return { error: error?.message ?? null }
 }

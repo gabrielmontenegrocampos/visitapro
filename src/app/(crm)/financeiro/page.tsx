@@ -1,12 +1,17 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { can } from '@/lib/roles'
-import { getDashboardFinanceiro, getCategorias, getProjetosParaLancamento, getLancamentos } from './actions'
+import { getDashboardFinanceiro, getCategorias, getProjetosParaLancamento, getLancamentos, getSaldoConciliacao } from './actions'
+import { getProfissionais } from '@/app/(crm)/equipe/actions'
 import FinanceiroClient from '@/components/financeiro/FinanceiroClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function FinanceiroPage() {
+export default async function FinanceiroPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ aba?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -14,13 +19,17 @@ export default async function FinanceiroPage() {
   if (!can(me?.role ?? '', 'financeiro_view')) redirect('/dashboard')
 
   const canEdit = can(me?.role ?? '', 'financeiro_edit')
+  const { aba } = await searchParams
 
-  const [dashboard, categorias, projetos, lancamentos] = await Promise.all([
+  const [dashboard, categorias, projetos, lancamentos, profissionaisRaw, saldoConciliacao] = await Promise.all([
     getDashboardFinanceiro(),
     getCategorias(),
     getProjetosParaLancamento(),
     getLancamentos(),
+    getProfissionais(),
+    getSaldoConciliacao(),
   ])
+  const profissionais = profissionaisRaw.filter((p: any) => p.ativo)
 
   return (
     <FinanceiroClient
@@ -28,7 +37,10 @@ export default async function FinanceiroPage() {
       categorias={categorias}
       projetos={projetos}
       lancamentos={lancamentos}
+      profissionais={profissionais}
+      saldoConciliacao={saldoConciliacao}
       canEdit={canEdit}
+      initialAba={aba}
     />
   )
 }
