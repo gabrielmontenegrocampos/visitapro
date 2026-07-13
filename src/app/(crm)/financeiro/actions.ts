@@ -554,45 +554,51 @@ export async function getSaldoConciliacao() {
   const admin = adminClient()
   const { data } = await admin
     .from('company_settings')
-    .select('saldo_inicial, saldo_inicial_data, saldo_banco_real, saldo_banco_data')
+    .select('saldo_inicial, saldo_inicial_data')
     .limit(1)
     .maybeSingle()
   return {
-    saldo_inicial:      Number(data?.saldo_inicial      ?? 0),
-    saldo_inicial_data: data?.saldo_inicial_data        ?? new Date().toISOString().slice(0, 10),
-    saldo_banco_real:   data?.saldo_banco_real != null  ? Number(data.saldo_banco_real) : null,
-    saldo_banco_data:   data?.saldo_banco_data          ?? null,
+    saldo_inicial:      Number(data?.saldo_inicial ?? 0),
+    saldo_inicial_data: data?.saldo_inicial_data   ?? new Date().toISOString().slice(0, 10),
   }
 }
 
-export async function updateSaldoConciliacao(input: {
-  saldo_inicial?: number
-  saldo_inicial_data?: string
-  saldo_banco_real?: number
-  saldo_banco_data?: string
-}) {
+export async function updateSaldoInicial(saldo_inicial: number, saldo_inicial_data: string) {
   const admin = adminClient()
-  const { data: existing } = await admin
-    .from('company_settings')
-    .select('id')
-    .limit(1)
-    .maybeSingle()
-
-  const payload = {
-    ...(input.saldo_inicial      != null && { saldo_inicial:      input.saldo_inicial      }),
-    ...(input.saldo_inicial_data != null && { saldo_inicial_data: input.saldo_inicial_data }),
-    ...(input.saldo_banco_real   != null && { saldo_banco_real:   input.saldo_banco_real   }),
-    ...(input.saldo_banco_data   != null && { saldo_banco_data:   input.saldo_banco_data   }),
-    updated_at: new Date().toISOString(),
-  }
-
+  const { data: existing } = await admin.from('company_settings').select('id').limit(1).maybeSingle()
+  const payload = { saldo_inicial, saldo_inicial_data, updated_at: new Date().toISOString() }
   let error
   if (existing?.id) {
     ;({ error } = await admin.from('company_settings').update(payload).eq('id', existing.id))
   } else {
     ;({ error } = await admin.from('company_settings').insert(payload))
   }
+  revalidatePath('/financeiro')
+  return { error: error?.message ?? null }
+}
 
+export async function getConciliacoesMensais() {
+  const admin = adminClient()
+  const { data } = await admin
+    .from('conciliacao_bancaria')
+    .select('mes, saldo_banco, observacoes, updated_at')
+    .order('mes', { ascending: false })
+  return (data ?? []).map(r => ({
+    mes:        r.mes as string,
+    saldo_banco: r.saldo_banco != null ? Number(r.saldo_banco) : null,
+    observacoes: r.observacoes as string | null,
+    updated_at:  r.updated_at as string,
+  }))
+}
+
+export async function upsertConciliacaoMensal(mes: string, saldo_banco: number, observacoes?: string) {
+  const admin = adminClient()
+  const { error } = await admin
+    .from('conciliacao_bancaria')
+    .upsert(
+      { mes, saldo_banco, observacoes: observacoes ?? null, updated_at: new Date().toISOString() },
+      { onConflict: 'mes' }
+    )
   revalidatePath('/financeiro')
   return { error: error?.message ?? null }
 }

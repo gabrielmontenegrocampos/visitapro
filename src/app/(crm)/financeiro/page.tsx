@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { can } from '@/lib/roles'
-import { getDashboardFinanceiro, getCategorias, getProjetosParaLancamento, getLancamentos, getSaldoConciliacao } from './actions'
+import { getDashboardFinanceiro, getCategorias, getProjetosParaLancamento, getLancamentos, getSaldoConciliacao, getConciliacoesMensais } from './actions'
 import { getProfissionais } from '@/app/(crm)/equipe/actions'
 import FinanceiroClient from '@/components/financeiro/FinanceiroClient'
 
@@ -21,13 +21,14 @@ export default async function FinanceiroPage({
   const canEdit = can(me?.role ?? '', 'financeiro_edit')
   const { aba } = await searchParams
 
-  const [dashboard, categorias, projetos, lancamentos, profissionaisRaw, saldoConciliacao] = await Promise.all([
+  const [dashboard, categorias, projetos, lancamentos, profissionaisRaw, saldoConciliacao, conciliacoesMensais] = await Promise.all([
     getDashboardFinanceiro(),
     getCategorias(),
     getProjetosParaLancamento(),
     getLancamentos(),
     getProfissionais(),
     getSaldoConciliacao(),
+    getConciliacoesMensais(),
   ])
   const profissionais = profissionaisRaw.filter((p: any) => p.ativo)
 
@@ -39,6 +40,7 @@ export default async function FinanceiroPage({
       lancamentos={lancamentos}
       profissionais={profissionais}
       saldoConciliacao={saldoConciliacao}
+      conciliacoesMensais={conciliacoesMensais}
       canEdit={canEdit}
       initialAba={aba}
     />

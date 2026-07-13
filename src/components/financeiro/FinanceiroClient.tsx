@@ -49,8 +49,12 @@ interface Lancamento {
 interface SaldoConciliacao {
   saldo_inicial: number
   saldo_inicial_data: string
-  saldo_banco_real: number | null
-  saldo_banco_data: string | null
+}
+interface ConciliacaoMensal {
+  mes: string
+  saldo_banco: number | null
+  observacoes: string | null
+  updated_at: string
 }
 
 interface Props {
@@ -60,6 +64,7 @@ interface Props {
   profissionais: { id: string; nome: string }[]
   lancamentos: Lancamento[]
   saldoConciliacao?: SaldoConciliacao
+  conciliacoesMensais?: ConciliacaoMensal[]
   canEdit: boolean
   initialAba?: string
 }
@@ -74,7 +79,7 @@ function resolveAba(aba?: string): ActiveTab {
   return 'resumo'
 }
 
-export default function FinanceiroClient({ dashboard, categorias: initialCats, projetos, profissionais, lancamentos: initialLanc, saldoConciliacao, canEdit, initialAba }: Props) {
+export default function FinanceiroClient({ dashboard, categorias: initialCats, projetos, profissionais, lancamentos: initialLanc, saldoConciliacao, conciliacoesMensais, canEdit, initialAba }: Props) {
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => resolveAba(initialAba))
 
   // Sincroniza a aba quando navega via sidebar (URL muda, componente reaproveita instância)
@@ -1073,6 +1078,7 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
             {saldoConciliacao && (
               <ConciliacaoBancariaCard
                 config={saldoConciliacao}
+                conciliacoes={conciliacoesMensais ?? []}
                 lancamentos={lancamentos as any}
                 canEdit={canEdit}
               />
