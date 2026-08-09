@@ -16,6 +16,7 @@ interface SearchableSelectProps {
   value: string
   onChange: (value: string) => void
   placeholder?: string
+  emptyMessage?: string
   className?: string
 }
 
@@ -24,6 +25,7 @@ export default function SearchableSelect({
   value,
   onChange,
   placeholder = 'Selecione...',
+  emptyMessage = 'Nenhum resultado',
   className,
 }: SearchableSelectProps) {
   const [open, setOpen]   = useState(false)
@@ -138,7 +140,7 @@ export default function SearchableSelect({
             {/* Options */}
             <div className="max-h-[240px] overflow-y-auto" onMouseDown={(e) => e.stopPropagation()}>
               {filtered.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-4">Nenhum resultado</p>
+                <p className="text-xs text-gray-400 text-center py-4">{emptyMessage}</p>
               ) : (
                 filtered.map((opt) => (
                   <button
