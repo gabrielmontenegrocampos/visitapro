@@ -41,12 +41,12 @@ export async function deleteProjeto(id: string) {
   redirect('/diario-obra')
 }
 
-export async function createRegistro(projetoId: string) {
+export async function createRegistro(projetoId: string, date?: string) {
   const admin = adminClient()
-  const today = new Date().toISOString().split('T')[0]
+  const dia = date ?? new Date().toISOString().split('T')[0]
   const { data, error } = await admin
     .from('diario_obras')
-    .insert({ projeto_id: projetoId, data: today })
+    .insert({ projeto_id: projetoId, data: dia })
     .select()
     .single()
   if (error || !data) return { error: error?.message ?? 'Erro ao criar registro' }
