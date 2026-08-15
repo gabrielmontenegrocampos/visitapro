@@ -189,11 +189,12 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
   // Por projeto (para aba obras)
   const porProjetoFiltrado = useMemo(() => {
     if (activeTab !== 'obras') return []
-    const mapa: Record<string, { id: string; nome: string; receitas: number; despesas: number; saldo: number; aReceber: number; aPagar: number }> = {}
+    const mapa: Record<string, { id: string; nome: string; company: string | null; receitas: number; despesas: number; saldo: number; aReceber: number; aPagar: number }> = {}
     filtered.forEach(l => {
       const pid = l.projeto_id ?? '__sem_projeto__'
       const nome = l.projetos_diario?.nome ?? 'Sem obra vinculada'
-      if (!mapa[pid]) mapa[pid] = { id: pid, nome, receitas: 0, despesas: 0, saldo: 0, aReceber: 0, aPagar: 0 }
+      const company = projetos.find(pr => pr.id === pid)?.company ?? null
+      if (!mapa[pid]) mapa[pid] = { id: pid, nome, company, receitas: 0, despesas: 0, saldo: 0, aReceber: 0, aPagar: 0 }
       if (l.tipo === 'receita') {
         if (l.status === 'pago') { mapa[pid].receitas += Number(l.valor); mapa[pid].saldo += Number(l.valor) }
         else if (l.status === 'pendente') mapa[pid].aReceber += Number(l.valor)
@@ -1641,7 +1642,12 @@ export default function FinanceiroClient({ dashboard, categorias: initialCats, p
                         <HardHat size={13} className="text-orange-600" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">{p.nome}</p>
+                        <p className="text-sm font-bold text-gray-900 truncate">
+                          {p.company ?? p.nome}
+                        </p>
+                        {p.company && (
+                          <p className="text-xs text-gray-500 truncate">{p.nome}</p>
+                        )}
                         {(p.aReceber > 0 || p.aPagar > 0) && (
                           <p className="text-xs text-amber-500">
                             {p.aReceber > 0 && `+${fmt(p.aReceber)} a receber`}
