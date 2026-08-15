@@ -372,8 +372,8 @@ export default function DiarioDashboardClient({
                           </div>
                         )}
                         <div className="min-w-0">
-                          <p className="text-xs font-semibold text-gray-800 truncate">{nomeObra}</p>
-                          {responsavel && <p className="text-[10px] text-gray-400 truncate">{responsavel}</p>}
+                          <p className="text-xs font-bold text-gray-900 truncate">{responsavel ?? nomeObra}</p>
+                          {responsavel && <p className="text-[10px] text-gray-500 truncate">{nomeObra}</p>}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
