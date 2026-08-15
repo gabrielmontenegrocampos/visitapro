@@ -63,6 +63,7 @@ export interface Database {
           value: number
           status: 'rascunho' | 'enviada' | 'aceita' | 'recusada' | 'expirada'
           sent_at: string | null
+          accepted_at: string | null
           expires_at: string | null
           bdi_tax: number | null
           bdi_insurance: number | null

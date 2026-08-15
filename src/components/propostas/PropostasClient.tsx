@@ -22,10 +22,15 @@ function WhatsAppIcon() {
   )
 }
 
-interface Lead { id: string; name: string }
+interface Lead { id: string; name: string; company: string | null }
 interface ProposalWithRelations extends Proposal {
-  leads: { id: string; name: string; phone: string | null } | null
+  leads: { id: string; name: string; company: string | null; phone: string | null } | null
   profiles: { id: string; full_name: string } | null
+}
+
+function clientLabel(lead: { name: string; company: string | null } | null) {
+  if (!lead) return '—'
+  return lead.company ?? lead.name
 }
 
 const STATUS_ICONS: Record<string, typeof CheckCircle> = {
@@ -75,15 +80,18 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
   }
 
   async function updateStatus(id: string, status: Proposal['status']) {
+    const now = new Date().toISOString()
     await supabase.from('proposals').update({
       status,
-      sent_at: status === 'enviada' ? new Date().toISOString() : undefined,
+      sent_at:     status === 'enviada' ? now : undefined,
+      accepted_at: status === 'aceita'  ? now : undefined,
     }).eq('id', id)
     setProposals((prev) => prev.map((p) => p.id === id ? { ...p, status } : p))
   }
 
   const filtered = proposals.filter((p) => {
     const matchSearch = !search ||
+      (p.leads?.company ?? '').toLowerCase().includes(search.toLowerCase()) ||
       (p.leads?.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
       p.title.toLowerCase().includes(search.toLowerCase())
     const matchStatus = !statusFilter || p.status === statusFilter
@@ -142,7 +150,7 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
             <div key={p.id} className="card p-4 space-y-3 hover:shadow-md transition-shadow relative">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-gray-900 truncate">{p.leads?.name ?? '—'}</p>
+                  <p className="font-semibold text-gray-900 truncate">{clientLabel(p.leads)}</p>
                   <InlineEditTitle
                     proposalId={p.id}
                     title={p.title}
@@ -164,7 +172,10 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
 
               <div className="flex items-center justify-between">
                 <p className="text-lg font-bold text-gray-900">{formatCurrency(p.value)}</p>
-                <p className="text-xs text-gray-400">{formatDate(p.created_at)}</p>
+                <p className="text-xs text-gray-400">
+                  {p.status === 'aceita' ? 'Aceita em' : p.status === 'enviada' ? 'Enviada em' : 'Criada em'}{' '}
+                  {formatDate(p.status === 'aceita' ? (p.accepted_at ?? p.created_at) : p.status === 'enviada' ? (p.sent_at ?? p.created_at) : p.created_at)}
+                </p>
               </div>
 
               <div className="pt-2 border-t border-gray-100 flex items-center gap-2">
@@ -210,7 +221,7 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Cliente', 'Título', 'Valor', 'Status', 'Criada em', 'Cálculo', 'Status'].map((h) => (
+                {['Cliente', 'Título', 'Valor', 'Status', 'Data', 'Cálculo', 'Status'].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -222,7 +233,7 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                   <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-900">
                       <Link href={`/propostas/${p.id}`} className="hover:text-blue-600 transition-colors">
-                        {p.leads?.name ?? '—'}
+                        {clientLabel(p.leads)}
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-gray-600 max-w-[200px]">
@@ -241,7 +252,14 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                         {PROPOSAL_STATUS_LABELS[p.status]}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatDate(p.created_at)}</td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      <span className="text-gray-400 block leading-none">
+                        {p.status === 'aceita' ? 'Aceita em' : p.status === 'enviada' ? 'Enviada em' : 'Criada em'}
+                      </span>
+                      <span className="text-gray-700 font-medium">
+                        {formatDate(p.status === 'aceita' ? (p.accepted_at ?? p.created_at) : p.status === 'enviada' ? (p.sent_at ?? p.created_at) : p.created_at)}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <Link
@@ -319,7 +337,7 @@ export default function PropostasClient({ proposals: initialProposals, leads }: 
                   placeholder="Selecione o cliente"
                   options={[
                     { value: '', label: 'Selecione o cliente' },
-                    ...leads.map((l) => ({ value: l.id, label: l.name })),
+                    ...leads.map((l) => ({ value: l.id, label: l.company ? `${l.company} / ${l.name}` : l.name })),
                   ]}
                 />
               </div>

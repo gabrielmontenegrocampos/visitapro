@@ -38,15 +38,19 @@ export async function getDashboardMetrics(inicio?: string, fim?: string) {
   }
   const leadsNoPeriodoRes = await leadsQuery
 
-  // Proposals filtered by period
-  let propostasQuery = admin.from('proposals').select('status, value')
+  // Proposals filtered by period — aceitas filtradas por accepted_at, demais por created_at
+  const { data: todasPropostas } = await admin
+    .from('proposals')
+    .select('status, value, accepted_at, created_at')
+  let ps = todasPropostas ?? []
   if (hasFilter) {
-    propostasQuery = propostasQuery
-      .gte('created_at', inicio + 'T00:00:00')
-      .lte('created_at', fim + 'T23:59:59')
+    ps = ps.filter(p => {
+      const d = p.status === 'aceita'
+        ? (p.accepted_at ?? p.created_at)
+        : p.created_at
+      return d >= inicio! + 'T00:00:00' && d <= fim! + 'T23:59:59'
+    })
   }
-  const { data: propostas } = await propostasQuery
-  const ps = propostas ?? []
 
   return {
     total_leads: totalLeadsRes.count ?? 0,
