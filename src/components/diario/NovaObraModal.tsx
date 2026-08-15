@@ -21,7 +21,7 @@ const PROPOSAL_STATUS_LABELS: Record<string, string> = {
 
 interface ProposalOption {
   id: string; title: string; value: number; status: string
-  leads: { name: string; phone: string | null } | null
+  leads: { name: string; company: string | null; phone: string | null } | null
 }
 
 interface Props {
@@ -145,10 +145,15 @@ export default function NovaObraModal({ proposals, onClose, onSuccess }: Props) 
               placeholder="Selecione a proposta..."
               options={[
                 { value: '', label: 'Selecione...' },
-                ...proposals.map(p => ({
-                  value: p.id,
-                  label: `${p.leads?.name ?? '—'} — ${p.title} [${PROPOSAL_STATUS_LABELS[p.status] ?? p.status}]`,
-                })),
+                ...proposals.map(p => {
+                  const name = p.leads?.name ?? '—'
+                  const company = p.leads?.company
+                  return {
+                    value: p.id,
+                    label: `${name} — ${p.title} [${PROPOSAL_STATUS_LABELS[p.status] ?? p.status}]`,
+                    subtitle: company ?? undefined,
+                  }
+                }),
               ]}
             />
             {proposals.length === 0 && (
@@ -156,7 +161,12 @@ export default function NovaObraModal({ proposals, onClose, onSuccess }: Props) 
             )}
             {sel && (
               <p className="text-xs text-gray-500">
-                Cliente: <span className="font-medium text-gray-700">{sel.leads?.name}</span>
+                Cliente: <span className="font-medium text-gray-700">
+                  {sel.leads?.company ?? sel.leads?.name}
+                </span>
+                {sel.leads?.company && sel.leads?.name !== sel.leads.company && (
+                  <> · {sel.leads.name}</>
+                )}
                 {sel.value > 0 && <> · {sel.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</>}
               </p>
             )}

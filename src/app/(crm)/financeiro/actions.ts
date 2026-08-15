@@ -541,11 +541,12 @@ export async function getProjetosParaLancamento() {
     .from('projetos_diario')
     .select('id, titulo_publico, proposal_id, proposals(id, title, value, status, leads(id, name, company))')
     .order('created_at', { ascending: false })
-  // Deriva o campo `nome` a partir de titulo_publico, empresa/condomínio, nome do lead ou da proposta
   return (data ?? []).map((p: any) => ({
-    ...p,
+    id: p.id,
     nome: p.titulo_publico || p.proposals?.leads?.company || p.proposals?.leads?.name || p.proposals?.title || 'Projeto sem nome',
-  })) as any[]
+    company: p.proposals?.leads?.company ?? p.proposals?.leads?.name ?? null,
+    proposals: p.proposals ? { value: p.proposals.value, title: p.proposals.title } : null,
+  }))
 }
 
 // ─── Conciliação Bancária ──────────────────────────────────────

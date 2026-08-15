@@ -26,7 +26,7 @@ interface DashboardData {
 interface Props {
   dashboard: DashboardData
   categorias: CategoriaFinanceira[]
-  projetos: { id: string; nome: string; proposals?: { value: number; title: string } | null }[]
+  projetos: { id: string; nome: string; company?: string | null; proposals?: { value: number; title: string } | null }[]
 }
 
 function fmt(v: number) {

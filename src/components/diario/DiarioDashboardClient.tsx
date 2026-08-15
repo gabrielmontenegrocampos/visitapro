@@ -137,28 +137,6 @@ export default function DiarioDashboardClient({
 
   return (
     <div className="space-y-5">
-      {/* ── Barra de período ──────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3 flex flex-wrap items-center gap-3">
-        <span className="text-xs font-medium text-gray-500 shrink-0">Período:</span>
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl flex-wrap">
-          {(Object.keys(PERIODO_LABELS) as Periodo[]).map(p => (
-            <button key={p} onClick={() => setPeriodo(p)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                periodo === p
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}>
-              {PERIODO_LABELS[p]}
-            </button>
-          ))}
-        </div>
-        {ini && (
-          <span className="text-xs text-gray-400 ml-auto">
-            {formatDateBR(ini)} — {formatDateBR(fim)}
-          </span>
-        )}
-      </div>
-
       {/* ── Alertas ────────────────────────────────────────────────── */}
       {(atrasadas.length > 0 || semRegistro.length > 0) && (
         <div className="space-y-2">
@@ -240,9 +218,9 @@ export default function DiarioDashboardClient({
           sub={pausadas.length > 0 ? `${pausadas.length} pausada${pausadas.length > 1 ? 's' : ''}` : undefined}
         />
         <KpiCard
-          label="Registros no período" value={String(regPeriodo.length)}
+          label="Concluídas" value={String(concluidas.length)}
           icon={<Activity className="w-4 h-4" />} color="text-green-600 bg-green-50"
-          sub={regPeriodo.length > 0 ? `${new Set(regPeriodo.map(r => r.projeto_id)).size} obras ativas` : undefined}
+          sub={concluidas.length > 0 ? `de ${projetos.length} obra${projetos.length !== 1 ? 's' : ''}` : 'Nenhuma concluída'}
         />
         <KpiCard
           label="Em atraso" value={String(atrasadas.length)}
@@ -281,6 +259,38 @@ export default function DiarioDashboardClient({
           </div>
         </div>
       )}
+
+      {/* ── Divisor: análise por período ───────────────────────────── */}
+      <div className="flex items-center gap-3 pt-1">
+        <div className="flex-1 h-px bg-gray-100" />
+        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">Análise por período</span>
+        <div className="flex-1 h-px bg-gray-100" />
+      </div>
+
+      {/* ── Barra de período ──────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3 flex flex-wrap items-center gap-3">
+        <span className="text-xs font-medium text-gray-500 shrink-0">Período:</span>
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl flex-wrap">
+          {(Object.keys(PERIODO_LABELS) as Periodo[]).map(p => (
+            <button key={p} onClick={() => setPeriodo(p)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                periodo === p
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              {PERIODO_LABELS[p]}
+            </button>
+          ))}
+        </div>
+        {ini && (
+          <span className="text-xs text-gray-400">
+            {formatDateBR(ini)} — {formatDateBR(fim)}
+          </span>
+        )}
+        <span className="ml-auto text-xs font-semibold text-gray-600 bg-gray-100 rounded-lg px-2.5 py-1">
+          {regPeriodo.length} registro{regPeriodo.length !== 1 ? 's' : ''}
+        </span>
+      </div>
 
       {/* ── Gráfico: registros por dia ──────────────────────────────── */}
       {regPorDia.length > 0 && (

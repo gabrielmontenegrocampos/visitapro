@@ -24,6 +24,7 @@ function formatMesAno(dateStr: string) {
 interface Projeto {
   id: string
   nome: string
+  company?: string | null
   proposals?: { value: number; title: string } | null
 }
 
@@ -225,13 +226,16 @@ export default function LancamentoModal({ categorias, projetos, profissionais = 
                     placeholder="Selecionar obra..."
                     emptyMessage="Nenhuma obra encontrada"
                     className={!projetoId ? 'border-amber-300' : ''}
-                    options={projetos.map(p => ({
-                      value: p.id,
-                      label: p.nome,
-                      subtitle: p.proposals?.value
-                        ? `Orçado: ${p.proposals.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
-                        : undefined,
-                    }))}
+                    options={projetos.map(p => {
+                      const parts: string[] = []
+                      if (p.company) parts.push(p.company)
+                      if (p.proposals?.value) parts.push(`Orçado: ${p.proposals.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`)
+                      return {
+                        value: p.id,
+                        label: p.nome,
+                        subtitle: parts.length ? parts.join(' · ') : undefined,
+                      }
+                    })}
                   />
                   {!projetoId && (
                     <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
