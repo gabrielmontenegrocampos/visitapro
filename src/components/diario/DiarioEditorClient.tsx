@@ -18,20 +18,24 @@ interface MembroEquipe { id: string; nome: string; funcao: string; horas: string
 interface Atividade { id: string; area: string; descricao: string; status: 'feito' | 'em_andamento' | 'pendente' }
 interface Material { id: string; nome: string; quantidade: string; unidade: string }
 
+interface OcorrenciaItem { id: string; descricao: string; tipo: string; severidade: string }
 interface Registro {
   id: string; projeto_id: string; data: string; clima: string; status_obra: string;
   responsavel: string | null;
+  turno: string | null;
+  temperatura: string | null;
   equipe: MembroEquipe[] | null;
   atividades: Atividade[] | null;
   materiais: Material[] | null;
   ocorrencias: string | null;
+  ocorrencias_itens: OcorrenciaItem[] | null;
   notas_cliente: string | null;
   proximas_atividades: string | null;
   fotos: Foto[] | null;
 }
 interface Projeto {
   id: string;
-  proposals: { title: string; leads: { name: string } | null } | null
+  proposals: { title: string; leads: { name: string; company: string | null } | null } | null
 }
 
 // ---------------------------------------------------------------------------
@@ -61,6 +65,19 @@ const AREA_SUGESTOES = [
   'Grade', 'Portão', 'Garagem',
 ]
 const UNIDADES = ['litros', 'kg', 'm²', 'unidades', 'sacas', 'metros', 'latas']
+const TURNO_OPTIONS = [
+  { value: 'manha',    label: 'Manhã' },
+  { value: 'tarde',    label: 'Tarde' },
+  { value: 'dia_todo', label: 'Dia todo' },
+  { value: 'noite',    label: 'Noite' },
+]
+const OCORRENCIA_TIPOS = ['problema', 'desvio', 'observacao'] as const
+const OCORRENCIA_SEV   = ['baixa', 'media', 'alta'] as const
+const SEV_COLORS: Record<string, string> = {
+  baixa: 'bg-yellow-100 text-yellow-700',
+  media: 'bg-orange-100 text-orange-700',
+  alta:  'bg-red-100 text-red-700',
+}
 
 function newId() { return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}` }
 
@@ -109,10 +126,13 @@ export default function DiarioEditorClient({
   const [responsavel, setResponsavel] = useState(initial.responsavel ?? '')
   const [clima, setClima]         = useState(initial.clima)
   const [statusObra, setStatusObra] = useState(initial.status_obra)
+  const [turno, setTurno]         = useState(initial.turno ?? '')
+  const [temperatura, setTemperatura] = useState(initial.temperatura ?? '')
   // Lists
   const [equipe, setEquipe]       = useState<MembroEquipe[]>(initial.equipe ?? [])
   const [atividades, setAtividades] = useState<Atividade[]>(initial.atividades ?? [])
   const [materiais, setMateriais] = useState<Material[]>(initial.materiais ?? [])
+  const [ocorrenciasItens, setOcorrenciasItens] = useState<OcorrenciaItem[]>(initial.ocorrencias_itens ?? [])
   // Texts
   const [ocorrencias, setOcorrencias]             = useState(initial.ocorrencias ?? '')
   const [notasCliente, setNotasCliente]           = useState(initial.notas_cliente ?? '')
@@ -212,6 +232,26 @@ export default function DiarioEditorClient({
   }
 
   // ---------------------------------------------------------------------------
+  // Ocorrências estruturadas
+  // ---------------------------------------------------------------------------
+  function addOcorrencia() {
+    const nova: OcorrenciaItem = { id: newId(), descricao: '', tipo: 'observacao', severidade: 'baixa' }
+    const next = [...ocorrenciasItens, nova]
+    setOcorrenciasItens(next)
+    saveNow({ ocorrencias_itens: next })
+  }
+  function updateOcorrencia(id: string, field: keyof OcorrenciaItem, val: string) {
+    const next = ocorrenciasItens.map(o => o.id === id ? { ...o, [field]: val } : o)
+    setOcorrenciasItens(next)
+    debounceSave({ ocorrencias_itens: next })
+  }
+  function removeOcorrencia(id: string) {
+    const next = ocorrenciasItens.filter(o => o.id !== id)
+    setOcorrenciasItens(next)
+    saveNow({ ocorrencias_itens: next })
+  }
+
+  // ---------------------------------------------------------------------------
   // Materiais
   // ---------------------------------------------------------------------------
   function addMaterial() {
@@ -304,7 +344,7 @@ export default function DiarioEditorClient({
     await deleteRegistro(initial.id, projeto.id)
   }
 
-  const clientName = projeto.proposals?.leads?.name ?? '—'
+  const clientName = projeto.proposals?.leads?.company ?? projeto.proposals?.leads?.name ?? '—'
 
   return (
     <>
@@ -357,6 +397,30 @@ export default function DiarioEditorClient({
                 placeholder="Nome do responsável"
                 value={responsavel}
                 onChange={e => { setResponsavel(e.target.value); debounceSave({ responsavel: e.target.value }) }}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Turno</label>
+              <select
+                className="input"
+                value={turno}
+                onChange={e => { setTurno(e.target.value); saveNow({ turno: e.target.value || null }) }}
+              >
+                <option value="">— Selecione —</option>
+                {TURNO_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Temperatura (°C)</label>
+              <input
+                type="number"
+                className="input"
+                placeholder="Ex: 28"
+                value={temperatura}
+                onChange={e => { setTemperatura(e.target.value); debounceSave({ temperatura: e.target.value ? Number(e.target.value) : null }) }}
               />
             </div>
           </div>
@@ -674,19 +738,72 @@ export default function DiarioEditorClient({
           </div>
         </Section>
 
-        {/* Bloco 6 — Ocorrências internas */}
-        <Section title="Ocorrências Internas" icon={Lock} defaultOpen={false}>
-          <div className="space-y-2">
+        {/* Bloco 6 — Ocorrências estruturadas */}
+        <Section title="Ocorrências" icon={Lock} defaultOpen={false}>
+          <div className="space-y-3">
             <p className="text-xs text-gray-400 flex items-center gap-1">
               <Lock className="w-3 h-3" /> Não visível para o cliente
             </p>
-            <textarea
-              className="input resize-none w-full"
-              rows={4}
-              placeholder="Problemas, imprevistos, conflitos, observações internas..."
-              value={ocorrencias}
-              onChange={e => { setOcorrencias(e.target.value); debounceSave({ ocorrencias: e.target.value }) }}
-            />
+
+            {ocorrenciasItens.length > 0 && (
+              <div className="space-y-2">
+                {ocorrenciasItens.map(o => (
+                  <div key={o.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <select
+                        className="input text-xs py-1 w-28"
+                        value={o.tipo}
+                        onChange={e => updateOcorrencia(o.id, 'tipo', e.target.value)}
+                      >
+                        <option value="problema">Problema</option>
+                        <option value="desvio">Desvio</option>
+                        <option value="observacao">Observação</option>
+                      </select>
+                      <div className="flex gap-1">
+                        {OCORRENCIA_SEV.map(s => (
+                          <button
+                            key={s}
+                            onClick={() => updateOcorrencia(o.id, 'severidade', s)}
+                            className={`text-xs px-2 py-0.5 rounded-full font-medium transition-all border ${
+                              o.severidade === s
+                                ? `${SEV_COLORS[s]} border-transparent ring-1 ring-offset-1`
+                                : 'bg-white text-gray-400 border-gray-200'
+                            }`}
+                          >
+                            {s.charAt(0).toUpperCase() + s.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                      <button onClick={() => removeOcorrencia(o.id)} className="ml-auto p-1 text-gray-300 hover:text-red-500">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <input
+                      className="input text-sm py-1.5 w-full"
+                      placeholder="Descreva a ocorrência..."
+                      value={o.descricao}
+                      onChange={e => updateOcorrencia(o.id, 'descricao', e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button onClick={addOcorrencia} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium">
+              <Plus className="w-4 h-4" /> Adicionar ocorrência
+            </button>
+
+            {/* Campo legado para notas internas livres */}
+            <div>
+              <label className="label text-xs">Notas internas livres</label>
+              <textarea
+                className="input resize-none w-full text-sm"
+                rows={3}
+                placeholder="Observações gerais..."
+                value={ocorrencias}
+                onChange={e => { setOcorrencias(e.target.value); debounceSave({ ocorrencias: e.target.value }) }}
+              />
+            </div>
           </div>
         </Section>
 
