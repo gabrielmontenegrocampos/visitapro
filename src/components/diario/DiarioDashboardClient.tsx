@@ -334,23 +334,14 @@ export default function DiarioDashboardClient({
         </div>
       )}
 
-      {/* ── Progresso das obras ────────────────────────────────────── */}
+      {/* ── Lista de obras ─────────────────────────────────────────── */}
       {progressoPorProjeto.filter(x => x.projeto.status_projeto !== 'concluida').length > 0 && (
-        <div className="card p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-700">Progresso das obras ativas</h2>
-            {progressoPorProjeto.filter(x => x.prog > 0).length > 0 && (
-              <span className="text-xs text-gray-400">
-                Média: {Math.round(
-                  progressoPorProjeto
-                    .filter(x => x.projeto.status_projeto !== 'concluida' && x.prog > 0)
-                    .reduce((s, x) => s + x.prog, 0) /
-                  Math.max(progressoPorProjeto.filter(x => x.projeto.status_projeto !== 'concluida' && x.prog > 0).length, 1)
-                )}%
-              </span>
-            )}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <HardHat className="w-4 h-4 text-orange-500" />
+            <h2 className="text-sm font-semibold text-gray-700">Obras ativas</h2>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {progressoPorProjeto
               .filter(x => x.projeto.status_projeto !== 'concluida')
               .sort((a, b) => b.prog - a.prog)
@@ -360,48 +351,28 @@ export default function DiarioDashboardClient({
                 const isAtrasada = p.data_previsao_fim && p.data_previsao_fim < hoje
                 return (
                   <Link key={p.id} href={`/diario-obra/${p.id}`}
-                    className="block hover:bg-gray-50 rounded-xl p-2 -mx-2 transition-colors">
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        {p.foto_capa ? (
-                          <img src={p.foto_capa} alt={nomeObra}
-                            className="w-7 h-7 rounded-lg object-cover shrink-0" />
-                        ) : (
-                          <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                            <HardHat className="w-3.5 h-3.5 text-blue-400" />
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-gray-900 truncate">{responsavel ?? nomeObra}</p>
-                          {responsavel && <p className="text-[10px] text-gray-500 truncate">{nomeObra}</p>}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {isAtrasada && (
-                          <span className="text-[10px] font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full">
-                            Atraso
-                          </span>
-                        )}
-                        <span className="text-xs font-bold" style={{ color: prog > 0 ? progressColor(prog) : '#9ca3af' }}>
-                          {prog > 0 ? `${prog}%` : '—'}
-                        </span>
-                        <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
-                      </div>
+                    className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-transparent hover:bg-orange-50 hover:border-orange-100 transition-colors">
+                    <div className="w-7 h-7 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
+                      <HardHat className="w-3.5 h-3.5 text-orange-600" />
                     </div>
-                    <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      {prog > 0 && (
-                        <div className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${prog}%`, backgroundColor: progressColor(prog) }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-900 truncate">{responsavel ?? nomeObra}</p>
+                      {responsavel && <p className="text-xs text-gray-500 truncate">{nomeObra}</p>}
+                      {(isAtrasada || ultimoReg) && (
+                        <p className="text-xs mt-0.5">
+                          {isAtrasada
+                            ? <span className="text-red-500 font-medium">Em atraso</span>
+                            : <span className="text-gray-400">Último registro: {formatDateBR(ultimoReg!.data)}</span>
+                          }
+                        </p>
                       )}
                     </div>
-                    {ultimoReg && (
-                      <div className="flex items-center gap-1 mt-1">
-                        <Calendar className="w-2.5 h-2.5 text-gray-300" />
-                        <span className="text-[10px] text-gray-400">
-                          Último registro: {formatDateBR(ultimoReg.data)}
-                        </span>
-                      </div>
-                    )}
+                    <div className="shrink-0 text-right">
+                      {prog > 0 && (
+                        <span className="text-xs font-bold" style={{ color: progressColor(prog) }}>{prog}%</span>
+                      )}
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />
                   </Link>
                 )
               })}
