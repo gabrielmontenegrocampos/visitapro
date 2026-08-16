@@ -814,7 +814,10 @@ function autoPaginateHtml(html: string): Promise<string[]> {
         usedH += h
       })
       document.body.removeChild(wrapper)
-      resolve(groups.length > 0 ? groups.map(g => g.join('')) : [''])
+      const pages = groups.length > 0
+        ? groups.map(g => g.join('').replace(/^(\s*<p[^>]*>\s*<\/p>\s*)+/, '').replace(/(\s*<p[^>]*>\s*<\/p>\s*)+$/, '').trim() || '')
+        : ['']
+      resolve(pages)
     }))
   })
 }
@@ -843,18 +846,21 @@ function PageEditorInstance({ initialContent, pageIndex, onUpdate, onFocus }: Pa
   })
 
   return (
-    <div className="print-paper" style={{ position: 'relative', background: 'white', boxShadow: '0 2px 16px rgba(0,0,0,0.10)', marginBottom: GAP }}>
+    <div className="print-paper" style={{ background: 'white', boxShadow: '0 2px 16px rgba(0,0,0,0.10)', marginBottom: GAP }}>
       <FloatingToolbar editor={editor} />
 
-      {/* Full A4 page — overflow:hidden clips text at page boundary */}
+      {/* Content area: clips exactly at CONTENT bottom (no text in bottom margin) */}
       <div style={{
-        height: PAGE_H,
+        height: PAGE_M + CONTENT,
         overflow: 'hidden',
-        padding: `${PAGE_M}px`,
+        padding: `${PAGE_M}px ${PAGE_M}px 0`,
         boxSizing: 'border-box',
       }}>
         <EditorContent editor={editor} />
       </div>
+
+      {/* Bottom margin — visually part of page, unreachable by text */}
+      <div style={{ height: PAGE_M }} />
     </div>
   )
 }
