@@ -27,11 +27,11 @@ import {
   List, ListOrdered, AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Undo2, Redo2, Printer, CheckCircle, Loader2, ChevronDown,
   Table2, Image as ImageIcon, Minus,
-  Scissors, ChevronUp, Layout as LayoutTemplate,
-  Trash2, PanelBottom,
+  Scissors, ChevronUp,
+  Trash2,
   Highlighter,
 } from 'lucide-react'
-import { saveContrato, updateContratoStatus, updateContratoTitle, saveContratoHeader, saveContratoFooter } from '@/app/(crm)/contratos/actions'
+import { saveContrato, updateContratoStatus, updateContratoTitle } from '@/app/(crm)/contratos/actions'
 
 // ── Custom: Font Size ─────────────────────────────────────────────────────────
 
@@ -824,18 +824,11 @@ function autoPaginateHtml(html: string): Promise<string[]> {
 interface PageEditorProps {
   initialContent: string
   pageIndex: number
-  totalPages: number
-  footerText: string
-  onFooterChange: (v: string) => void
   onUpdate: (html: string) => void
   onFocus: (ed: NonNullable<ReturnType<typeof useEditor>>) => void
-  contratoId: string
 }
 
-function PageEditorInstance({
-  initialContent, pageIndex, totalPages, footerText,
-  onFooterChange, onUpdate, onFocus, contratoId,
-}: PageEditorProps) {
+function PageEditorInstance({ initialContent, pageIndex, onUpdate, onFocus }: PageEditorProps) {
   const editor = useEditor({
     extensions: makeExtensions(pageIndex === 0 ? 'Comece a editar o contrato...' : ''),
     content: initialContent,
@@ -849,45 +842,18 @@ function PageEditorInstance({
     onFocus: ({ editor }) => onFocus(editor),
   })
 
-  // Content area: top padding + CONTENT height (overflow:hidden clips at CONTENT boundary)
-  // box-sizing: border-box means the 1042px height *includes* the 80px top padding
-  // → usable text area = 1042 - 80 = 962px = CONTENT
-  const contentAreaH = PAGE_M + CONTENT  // 80 + 962 = 1042
-
   return (
     <div className="print-paper" style={{ position: 'relative', background: 'white', boxShadow: '0 2px 16px rgba(0,0,0,0.10)', marginBottom: GAP }}>
       <FloatingToolbar editor={editor} />
 
-      {/* Page content area — overflow:hidden is what makes pages truly separate */}
+      {/* Full A4 page — overflow:hidden clips text at page boundary */}
       <div style={{
-        height: contentAreaH,
+        height: PAGE_H,
         overflow: 'hidden',
-        padding: `${PAGE_M}px ${PAGE_M}px 0`,
+        padding: `${PAGE_M}px`,
         boxSizing: 'border-box',
       }}>
         <EditorContent editor={editor} />
-      </div>
-
-      {/* Footer bar */}
-      <div className="no-print" style={{
-        height: PAGE_M,
-        background: 'white',
-        borderTop: '1px solid #e5e7eb',
-        display: 'flex', alignItems: 'center',
-        padding: `0 ${PAGE_M}px`,
-      }}>
-        <input
-          value={footerText}
-          onChange={e => {
-            onFooterChange(e.target.value)
-            if (typeof window !== 'undefined') localStorage.setItem(`ft-${contratoId}`, e.target.value)
-          }}
-          style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: '8pt', color: '#94a3b8', flex: 1, minWidth: 0, paddingRight: 8, cursor: 'text' }}
-          placeholder="Clique aqui para editar o rodapé..."
-        />
-        <span style={{ fontSize: '8pt', color: '#94a3b8', whiteSpace: 'nowrap', userSelect: 'none' }}>
-          Página {pageIndex + 1} de {totalPages}
-        </span>
       </div>
     </div>
   )
@@ -939,10 +905,6 @@ export default function ContratoEditorPage({ contrato }: Props) {
   const [pagesReady, setPagesReady] = useState(false)
   // Active editor: whichever page the user last clicked/typed in
   const [activeEditor, setActiveEditor] = useState<ReturnType<typeof useEditor> | null>(null)
-  const [footerText, setFooterText] = useState(() => {
-    if (typeof window === 'undefined') return `${contrato.title} — ${clientName}`
-    return localStorage.getItem(`ft-${contrato.id}`) ?? `${contrato.title} — ${clientName}`
-  })
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   // Ref mirrors pages state so async save callbacks always see latest value
@@ -1053,21 +1015,7 @@ export default function ContratoEditorPage({ contrato }: Props) {
           .zone-editor { border: none !important; background: transparent !important; }
           .ProseMirror { min-height: auto !important; }
           table { page-break-inside: avoid; }
-          .print-footer-bar {
-            display: flex !important;
-            position: fixed;
-            bottom: 0; left: 0; right: 0;
-            justify-content: space-between;
-            align-items: center;
-            padding: 5pt 0 8pt;
-            font-size: 8pt;
-            color: #6b7280;
-            border-top: 0.5pt solid #d1d5db;
-            background: white;
-          }
-          .print-page-num::after { content: "Página " counter(page) " de " counter(pages); }
         }
-        .print-footer-bar { display: none; }
 
         /* Headings */
         .ProseMirror h1 { font-size: 1.5rem; font-weight: 700; margin: 1.5rem 0 0.5rem; text-align: center; }
@@ -1184,12 +1132,8 @@ export default function ContratoEditorPage({ contrato }: Props) {
                   key={i}
                   initialContent={pageHtml}
                   pageIndex={i}
-                  totalPages={pages.length}
-                  footerText={footerText}
-                  onFooterChange={text => setFooterText(text)}
                   onUpdate={html => handlePageUpdate(html, i)}
                   onFocus={ed => setActiveEditor(ed)}
-                  contratoId={contrato.id}
                 />
               ))}
 
@@ -1281,11 +1225,6 @@ export default function ContratoEditorPage({ contrato }: Props) {
         </div>
       )}
 
-      {/* Print-only footer — position:fixed renders on every printed page */}
-      <div className="print-footer-bar">
-        <span>{footerText}</span>
-        <span className="print-page-num" />
-      </div>
     </>
   )
 }
