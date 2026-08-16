@@ -59,21 +59,49 @@ const FontSize = Extension.create({
   },
 })
 
+// ── A4 page constants (96dpi) — defined early so PageBreakView can use them ──
+const PAGE_H  = 1122   // A4 height px
+const PAGE_M  = 80     // margin top/bottom px
+const CONTENT = PAGE_H - PAGE_M * 2  // 962px usable content per page
+const GAP     = 80     // visual gap between pages
+const TILE    = PAGE_H + GAP          // 1202px per tile
+
 // ── Custom: Page Break ────────────────────────────────────────────────────────
 
 function PageBreakView() {
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const [fillH, setFillH] = useState(300)
+
+  useEffect(() => {
+    const el = wrapperRef.current
+    if (!el) return
+    const paper = el.closest('.print-paper') as HTMLElement | null
+    if (!paper) return
+
+    function measure() {
+      const top = el!.getBoundingClientRect().top - paper!.getBoundingClientRect().top
+      if (top <= 10) return
+      const pageIdx = Math.floor(top / TILE)
+      const nextPageStart = (pageIdx + 1) * TILE
+      setFillH(Math.max(GAP + 4, Math.ceil(nextPageStart - top)))
+    }
+
+    measure()
+    const obs = new ResizeObserver(measure)
+    obs.observe(paper)
+    return () => obs.disconnect()
+  }, [])
+
   return (
     <NodeViewWrapper>
-      <div
-        contentEditable={false}
-        style={{ margin: '0 -5rem', userSelect: 'none' }}
-        className="flex items-center gap-3 bg-gray-200 py-4 px-8"
-      >
-        <div className="flex-1 border-t border-dashed border-gray-400" />
-        <span className="text-[11px] text-gray-500 font-medium tracking-wide uppercase font-sans whitespace-nowrap flex items-center gap-1.5">
-          ✂ Quebra de Página
-        </span>
-        <div className="flex-1 border-t border-dashed border-gray-400" />
+      <div ref={wrapperRef} contentEditable={false} style={{ height: fillH, userSelect: 'none', display: 'block' }}>
+        <div className="no-print" style={{ paddingTop: 8, opacity: 0.35, pointerEvents: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ flex: 1, borderTop: '1px dashed #9ca3af' }} />
+            <span style={{ fontSize: 10, color: '#6b7280', fontFamily: 'sans-serif', letterSpacing: '0.05em' }}>✂ quebra de página</span>
+            <div style={{ flex: 1, borderTop: '1px dashed #9ca3af' }} />
+          </div>
+        </div>
       </div>
     </NodeViewWrapper>
   )
@@ -579,91 +607,289 @@ function ZoneEditor({
   )
 }
 
-// ── Floating selection toolbar ────────────────────────────────────────────────
+// ── Floating selection toolbar (shows only when mouse hovers over selection) ──
 
 function FloatingToolbar({ editor }: { editor: ReturnType<typeof useEditor> | null }) {
-  const [toolbarPos, setToolbarPos] = useState<{ top: number; left: number } | null>(null)
-  const [editorState, setEditorState] = useState(0)
+  const [show, setShow] = useState(false)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const [tick, setTick] = useState(0)
+  const toolbarRef = useRef<HTMLDivElement>(null)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [ftColor, setFtColor] = useState(false)
+  const [ftSize, setFtSize] = useState(false)
+  const [ftFont, setFtFont] = useState(false)
+
+  const clearHide = () => { if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current = null } }
+  const scheduleHide = () => {
+    clearHide()
+    hideTimer.current = setTimeout(() => {
+      if (!toolbarRef.current?.matches(':hover')) setShow(false)
+      hideTimer.current = null
+    }, 300)
+  }
 
   useEffect(() => {
     if (!editor) return
-    const update = () => {
-      const { selection } = editor.state
-      const { from, to } = selection
-      if (from === to) { setToolbarPos(null); return }
+    const pm = editor.view.dom as HTMLElement
+
+    const onMouseMove = (e: MouseEvent) => {
+      const { from, to } = editor.state.selection
+      if (from === to) { scheduleHide(); return }
       try {
-        const start = editor.view.coordsAtPos(from)
-        const end = editor.view.coordsAtPos(to)
-        setToolbarPos({
-          top: Math.min(start.top, end.top) - 4,
-          left: (start.left + end.right) / 2,
-        })
-      } catch { setToolbarPos(null) }
-      setEditorState(n => n + 1)
+        const coords = editor.view.posAtCoords({ left: e.clientX, top: e.clientY })
+        if (coords && coords.pos >= from && coords.pos <= to) {
+          clearHide()
+          setPos({ top: e.clientY, left: e.clientX })
+          setShow(true)
+          setTick(n => n + 1)
+        } else {
+          scheduleHide()
+        }
+      } catch { scheduleHide() }
     }
-    editor.on('selectionUpdate', update)
-    editor.on('transaction', update)
-    return () => { editor.off('selectionUpdate', update); editor.off('transaction', update) }
+
+    const onSelectionChange = () => {
+      const { from, to } = editor.state.selection
+      if (from === to) setShow(false)
+      setTick(n => n + 1)
+    }
+
+    pm.addEventListener('mousemove', onMouseMove)
+    editor.on('selectionUpdate', onSelectionChange)
+    editor.on('transaction', onSelectionChange)
+
+    return () => {
+      pm.removeEventListener('mousemove', onMouseMove)
+      editor.off('selectionUpdate', onSelectionChange)
+      editor.off('transaction', onSelectionChange)
+      clearHide()
+    }
   }, [editor])
 
-  if (!editor || !toolbarPos) return null
+  if (!editor || !show) return null
+
+  const mkBtn = (label: string, active: boolean, onClick: () => void, cls = '') => (
+    <button key={label} type="button"
+      onMouseDown={e => { e.preventDefault(); onClick() }}
+      className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors ${cls} ${active ? 'bg-white/20' : 'hover:bg-white/10'}`}
+    >{label}</button>
+  )
+
+  const curFont = editor.getAttributes('textStyle').fontFamily || FONTS[0].value
+  const curSize = editor.getAttributes('textStyle').fontSize || '12pt'
+  const curColor = (editor.getAttributes('textStyle').color as string) || '#ffffff'
 
   return createPortal(
     <div
-      style={{ position: 'fixed', top: toolbarPos.top, left: toolbarPos.left, transform: 'translate(-50%, -100%)', zIndex: 9999 }}
+      ref={toolbarRef}
+      onMouseLeave={() => setShow(false)}
       onMouseDown={e => e.preventDefault()}
+      style={{ position: 'fixed', top: pos.top - 52, left: pos.left, transform: 'translateX(-50%)', zIndex: 9999 }}
     >
-      <div className="flex items-center gap-0.5 bg-gray-900 text-white rounded-xl px-1.5 py-1.5 shadow-2xl border border-gray-700/60" style={{ backdropFilter: 'blur(4px)' }}>
-        <button type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleBold().run() }}
-          className={`px-2 py-1 rounded-lg text-xs font-bold transition-colors ${editor.isActive('bold') ? 'bg-white/20' : 'hover:bg-white/10'}`}
-          title="Negrito (Ctrl+B)">N</button>
-        <button type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleItalic().run() }}
-          className={`px-2 py-1 rounded-lg text-xs italic transition-colors ${editor.isActive('italic') ? 'bg-white/20' : 'hover:bg-white/10'}`}
-          title="Itálico (Ctrl+I)">I</button>
-        <button type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleUnderline().run() }}
-          className={`px-2 py-1 rounded-lg text-xs underline transition-colors ${editor.isActive('underline') ? 'bg-white/20' : 'hover:bg-white/10'}`}
-          title="Sublinhado (Ctrl+U)">S</button>
-        <button type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleStrike().run() }}
-          className={`px-2 py-1 rounded-lg text-xs line-through transition-colors ${editor.isActive('strike') ? 'bg-white/20' : 'hover:bg-white/10'}`}
-          title="Tachado">T</button>
+      <div className="flex items-center gap-0.5 bg-gray-900/95 text-white rounded-xl px-2 py-1.5 shadow-2xl border border-gray-700/60"
+        style={{ backdropFilter: 'blur(8px)', whiteSpace: 'nowrap' }}>
+
+        {/* Font family */}
+        <div className="relative">
+          <button type="button"
+            onMouseDown={e => { e.preventDefault(); setFtFont(v => !v); setFtColor(false); setFtSize(false) }}
+            className="flex items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] hover:bg-white/10 transition-colors max-w-[82px]">
+            <span className="truncate">{FONTS.find(f => f.value === curFont)?.label ?? 'Fonte'}</span>
+            <ChevronDown className="w-2.5 h-2.5 shrink-0 text-white/50" />
+          </button>
+          {ftFont && (
+            <div className="absolute bottom-full mb-1 left-0 bg-white rounded-xl border border-gray-100 shadow-xl z-50 overflow-hidden min-w-[150px]">
+              {FONTS.map(f => (
+                <button key={f.value} type="button" style={{ fontFamily: f.value }}
+                  className="block w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
+                  onMouseDown={e => { e.preventDefault(); editor.chain().focus().setFontFamily(f.value).run(); setFtFont(false) }}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="w-px h-4 bg-white/20 mx-0.5" />
-        <button type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 1 }).run() }}
-          className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${editor.isActive('heading', { level: 1 }) ? 'bg-white/20' : 'hover:bg-white/10'}`}
-          title="Título 1">H1</button>
-        <button type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 2 }).run() }}
-          className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${editor.isActive('heading', { level: 2 }) ? 'bg-white/20' : 'hover:bg-white/10'}`}
-          title="Título 2">H2</button>
-        <button type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 3 }).run() }}
-          className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${editor.isActive('heading', { level: 3 }) ? 'bg-white/20' : 'hover:bg-white/10'}`}
-          title="Título 3">H3</button>
+
+        {/* Font size */}
+        <div className="relative">
+          <button type="button"
+            onMouseDown={e => { e.preventDefault(); setFtSize(v => !v); setFtColor(false); setFtFont(false) }}
+            className="flex items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] hover:bg-white/10 transition-colors min-w-[42px]">
+            {curSize}<ChevronDown className="w-2 h-2 text-white/50" />
+          </button>
+          {ftSize && (
+            <div className="absolute bottom-full mb-1 left-0 bg-white rounded-xl border border-gray-100 shadow-xl z-50 overflow-y-auto min-w-[72px]" style={{ maxHeight: 200 }}>
+              {SIZES.map(s => (
+                <button key={s} type="button"
+                  className={`block w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 ${curSize === s ? 'font-bold text-blue-600' : ''}`}
+                  onMouseDown={e => { e.preventDefault(); (editor.chain().focus() as any).setFontSize(s).run(); setFtSize(false) }}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="w-px h-4 bg-white/20 mx-0.5" />
-        <button type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().setTextAlign('left').run() }}
-          className={`px-1.5 py-1 rounded-lg text-[10px] transition-colors ${editor.isActive({ textAlign: 'left' }) ? 'bg-white/20' : 'hover:bg-white/10'}`}
-          title="Esquerda">◀</button>
-        <button type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().setTextAlign('center').run() }}
-          className={`px-1.5 py-1 rounded-lg text-[10px] transition-colors ${editor.isActive({ textAlign: 'center' }) ? 'bg-white/20' : 'hover:bg-white/10'}`}
-          title="Centralizar">⦿</button>
-        <button type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().setTextAlign('justify').run() }}
-          className={`px-1.5 py-1 rounded-lg text-[10px] transition-colors ${editor.isActive({ textAlign: 'justify' }) ? 'bg-white/20' : 'hover:bg-white/10'}`}
-          title="Justificar">▶</button>
+
+        {/* Text color */}
+        <div className="relative">
+          <button type="button"
+            onMouseDown={e => { e.preventDefault(); setFtColor(v => !v); setFtSize(false); setFtFont(false) }}
+            className="flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg hover:bg-white/10 transition-colors">
+            <span className="text-xs font-bold leading-none">A</span>
+            <span className="w-3.5 h-0.5 rounded" style={{ background: curColor }} />
+          </button>
+          {ftColor && (
+            <div className="absolute bottom-full mb-1 left-0 bg-white rounded-xl border border-gray-100 shadow-xl z-50 p-2">
+              <div className="grid grid-cols-6 gap-1">
+                {COLORS.map(c => (
+                  <button key={c} type="button"
+                    className="w-5 h-5 rounded border border-gray-200 hover:scale-110 transition-transform"
+                    style={{ background: c }}
+                    onMouseDown={e => { e.preventDefault(); editor.chain().focus().setColor(c).run(); setFtColor(false) }} />
+                ))}
+              </div>
+              <label className="flex items-center gap-1 mt-1">
+                <span className="text-[10px] text-gray-500">Outra:</span>
+                <input type="color" className="w-6 h-5 cursor-pointer border-0"
+                  onChange={e => editor.chain().focus().setColor(e.target.value).run()} />
+              </label>
+            </div>
+          )}
+        </div>
+
         <div className="w-px h-4 bg-white/20 mx-0.5" />
-        <button type="button"
-          onMouseDown={e => { e.preventDefault(); editor.chain().focus().unsetAllMarks().run() }}
-          className="px-2 py-1 rounded-lg text-[10px] hover:bg-white/10 transition-colors"
-          title="Limpar formatação">✕</button>
+
+        {mkBtn('N', editor.isActive('bold'), () => editor.chain().focus().toggleBold().run(), 'font-bold')}
+        {mkBtn('I', editor.isActive('italic'), () => editor.chain().focus().toggleItalic().run(), 'italic')}
+        {mkBtn('S', editor.isActive('underline'), () => editor.chain().focus().toggleUnderline().run(), 'underline')}
+        {mkBtn('T', editor.isActive('strike'), () => editor.chain().focus().toggleStrike().run(), 'line-through')}
+
+        <div className="w-px h-4 bg-white/20 mx-0.5" />
+
+        {mkBtn('H1', editor.isActive('heading', { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run())}
+        {mkBtn('H2', editor.isActive('heading', { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
+        {mkBtn('H3', editor.isActive('heading', { level: 3 }), () => editor.chain().focus().toggleHeading({ level: 3 }).run())}
+
+        <div className="w-px h-4 bg-white/20 mx-0.5" />
+
+        {mkBtn('◀', editor.isActive({ textAlign: 'left' }), () => editor.chain().focus().setTextAlign('left').run())}
+        {mkBtn('⦿', editor.isActive({ textAlign: 'center' }), () => editor.chain().focus().setTextAlign('center').run())}
+        {mkBtn('▶', editor.isActive({ textAlign: 'justify' }), () => editor.chain().focus().setTextAlign('justify').run())}
+
+        <div className="w-px h-4 bg-white/20 mx-0.5" />
+
+        {mkBtn('✕', false, () => editor.chain().focus().unsetAllMarks().run())}
       </div>
     </div>,
     document.body
+  )
+}
+
+// ── Auto-paginate: split HTML into chunks that fit in one A4 content area ─────
+
+function autoPaginateHtml(html: string): Promise<string[]> {
+  return new Promise(resolve => {
+    if (!html || html.trim() === '' || html === '<p></p>') { resolve(['']); return }
+    const wrapper = document.createElement('div')
+    wrapper.style.cssText = [
+      'position:fixed', 'left:-99999px', 'top:0', 'visibility:hidden', 'pointer-events:none',
+      `width:${794 - PAGE_M * 2}px`,
+      'font-size:12pt', 'line-height:1.75',
+      'font-family:Georgia,"Times New Roman",serif', 'color:#111827',
+    ].join(';')
+    wrapper.innerHTML = html
+    document.body.appendChild(wrapper)
+    // Double rAF to give browser time to fully lay out the content
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const groups: string[][] = [[]]
+      let usedH = 0
+      Array.from(wrapper.children as HTMLCollectionOf<HTMLElement>).forEach(child => {
+        const h = child.offsetHeight + 10
+        if (usedH > 0 && usedH + h > CONTENT) { groups.push([]); usedH = 0 }
+        groups[groups.length - 1].push(child.outerHTML)
+        usedH += h
+      })
+      document.body.removeChild(wrapper)
+      resolve(groups.length > 0 ? groups.map(g => g.join('')) : [''])
+    }))
+  })
+}
+
+// ── Per-page editor — one independent Tiptap instance per A4 page ─────────────
+
+interface PageEditorProps {
+  initialContent: string
+  pageIndex: number
+  totalPages: number
+  footerText: string
+  onFooterChange: (v: string) => void
+  onUpdate: (html: string) => void
+  onFocus: (ed: NonNullable<ReturnType<typeof useEditor>>) => void
+  contratoId: string
+}
+
+function PageEditorInstance({
+  initialContent, pageIndex, totalPages, footerText,
+  onFooterChange, onUpdate, onFocus, contratoId,
+}: PageEditorProps) {
+  const editor = useEditor({
+    extensions: makeExtensions(pageIndex === 0 ? 'Comece a editar o contrato...' : ''),
+    content: initialContent,
+    editorProps: {
+      attributes: {
+        class: 'outline-none',
+        style: 'font-family:Georgia,"Times New Roman",serif;font-size:12pt;line-height:1.75;color:#111827;',
+      },
+    },
+    onUpdate: ({ editor }) => onUpdate(editor.getHTML()),
+    onFocus: ({ editor }) => onFocus(editor),
+  })
+
+  // Content area: top padding + CONTENT height (overflow:hidden clips at CONTENT boundary)
+  // box-sizing: border-box means the 1042px height *includes* the 80px top padding
+  // → usable text area = 1042 - 80 = 962px = CONTENT
+  const contentAreaH = PAGE_M + CONTENT  // 80 + 962 = 1042
+
+  return (
+    <div className="print-paper" style={{ position: 'relative', background: 'white', boxShadow: '0 2px 16px rgba(0,0,0,0.10)', marginBottom: GAP }}>
+      <FloatingToolbar editor={editor} />
+
+      {/* Page content area — overflow:hidden is what makes pages truly separate */}
+      <div style={{
+        height: contentAreaH,
+        overflow: 'hidden',
+        padding: `${PAGE_M}px ${PAGE_M}px 0`,
+        boxSizing: 'border-box',
+      }}>
+        <EditorContent editor={editor} />
+      </div>
+
+      {/* Footer bar */}
+      <div className="no-print" style={{
+        height: PAGE_M,
+        background: 'white',
+        borderTop: '1px solid #e5e7eb',
+        display: 'flex', alignItems: 'center',
+        padding: `0 ${PAGE_M}px`,
+      }}>
+        <input
+          value={footerText}
+          onChange={e => {
+            onFooterChange(e.target.value)
+            if (typeof window !== 'undefined') localStorage.setItem(`ft-${contratoId}`, e.target.value)
+          }}
+          style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: '8pt', color: '#94a3b8', flex: 1, minWidth: 0, paddingRight: 8, cursor: 'text' }}
+          placeholder="Clique aqui para editar o rodapé..."
+        />
+        <span style={{ fontSize: '8pt', color: '#94a3b8', whiteSpace: 'nowrap', userSelect: 'none' }}>
+          Página {pageIndex + 1} de {totalPages}
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -675,14 +901,6 @@ const STATUS_OPTS = [
   { value: 'assinado', label: 'Assinado', badge: 'bg-emerald-100 text-emerald-700' },
   { value: 'cancelado',label: 'Cancelado',badge: 'bg-red-100 text-red-600'   },
 ]
-
-// ── A4 page constants (96dpi) ─────────────────────────────────────────────────
-const PAGE_H  = 1122   // A4 height px
-const PAGE_M  = 80     // margin top/bottom px
-const CONTENT = PAGE_H - PAGE_M * 2  // 962px usable content per page
-const GAP     = 80     // visual gap between pages
-const TILE    = PAGE_H + GAP          // 1202px per tile
-const FOOTER_TOP_IN_TILE = PAGE_H - PAGE_M + 8  // y of footer label within tile
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -703,7 +921,6 @@ interface Props {
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 export default function ContratoEditorPage({ contrato }: Props) {
-  // derive clientName early so state initializer can use it
   const clientName = contrato.leads?.company ?? contrato.leads?.name ?? '—'
 
   const [title, setTitle] = useState(contrato.title)
@@ -717,55 +934,71 @@ export default function ContratoEditorPage({ contrato }: Props) {
   const [tableRows, setTableRows] = useState('3')
   const [tableCols, setTableCols] = useState('3')
   const [imageUrl, setImageUrl] = useState('')
-  const [pageCount, setPageCount] = useState(1)
-  const [editingFooter, setEditingFooter] = useState(false)
+  // Pages: each entry is the HTML content of one A4 page
+  const [pages, setPages] = useState<string[]>([])
+  const [pagesReady, setPagesReady] = useState(false)
+  // Active editor: whichever page the user last clicked/typed in
+  const [activeEditor, setActiveEditor] = useState<ReturnType<typeof useEditor> | null>(null)
   const [footerText, setFooterText] = useState(() => {
     if (typeof window === 'undefined') return `${contrato.title} — ${clientName}`
     return localStorage.getItem(`ft-${contrato.id}`) ?? `${contrato.title} — ${clientName}`
   })
-  const [footerDraft, setFooterDraft] = useState(footerText)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const paperRef = useRef<HTMLDivElement>(null)
-
-  const editor = useEditor({
-    extensions: makeExtensions('Comece a editar o contrato...'),
-    content: contrato.content ?? '',
-    editorProps: {
-      attributes: {
-        class: 'outline-none',
-        style: 'font-family: Georgia, "Times New Roman", serif; font-size: 12pt; line-height: 1.75; color: #111827;',
-      },
-    },
-    onUpdate: ({ editor }) => {
-      if (saveTimer.current) clearTimeout(saveTimer.current)
-      setSaveStatus('saving')
-      saveTimer.current = setTimeout(async () => {
-        const res = await saveContrato(contrato.id, editor.getHTML())
-        if (res.error) { setSaveStatus('error') }
-        else { setSaveStatus('saved'); setLastSaved(new Date()); setTimeout(() => setSaveStatus('idle'), 3000) }
-      }, 1500)
-    },
-  })
+  // Ref mirrors pages state so async save callbacks always see latest value
+  const pagesRef = useRef<string[]>([])
 
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current) }, [])
 
-  // Count A4 pages and adjust padding so content fills complete pages
+  // On mount: split stored content into per-page arrays
   useEffect(() => {
-    if (!editor) return
-    const pm = paperRef.current?.querySelector('.ProseMirror') as HTMLElement | null
-    if (!pm) return
-    const obs = new ResizeObserver(([e]) => {
-      const h = e.contentRect.height - parseFloat(pm.style.paddingBottom || '0')
-      const pages = Math.max(1, Math.ceil(h / CONTENT))
-      setPageCount(pages)
-      // Pad ProseMirror so last page is always filled — keeps content off the gap zone
-      const overflow = h % CONTENT
-      pm.style.paddingBottom = overflow === 0 ? `${PAGE_M}px` : `${CONTENT - overflow + PAGE_M}px`
-    })
-    obs.observe(pm)
-    return () => obs.disconnect()
-  }, [editor])
+    const raw = contrato.content
+    if (!raw || raw.trim() === '' || raw === '<p></p>') {
+      pagesRef.current = ['']
+      setPages([''])
+      setPagesReady(true)
+      return
+    }
+    // If the content already has explicit page-break markers, split on them
+    if (raw.includes('data-type="page-break"')) {
+      const parts = raw
+        .split(/<div[^>]*data-type="page-break"[^>]*><\/div>/gi)
+        .filter(p => p.trim())
+      const result = parts.length > 0 ? parts : ['']
+      pagesRef.current = result
+      setPages(result)
+      setPagesReady(true)
+    } else {
+      // No explicit breaks — auto-distribute content across A4 pages by height
+      autoPaginateHtml(raw).then(result => {
+        pagesRef.current = result
+        setPages(result)
+        setPagesReady(true)
+      })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function handlePageUpdate(html: string, index: number) {
+    const next = [...pagesRef.current]
+    next[index] = html
+    pagesRef.current = next
+    setPages(next)
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    setSaveStatus('saving')
+    saveTimer.current = setTimeout(async () => {
+      const combined = pagesRef.current.join('<div data-type="page-break" class="page-break"></div>')
+      const res = await saveContrato(contrato.id, combined)
+      if (res.error) setSaveStatus('error')
+      else { setSaveStatus('saved'); setLastSaved(new Date()); setTimeout(() => setSaveStatus('idle'), 3000) }
+    }, 1500)
+  }
+
+  function handleAddPage() {
+    const next = [...pagesRef.current, '']
+    pagesRef.current = next
+    setPages(next)
+  }
 
   async function changeStatus(v: string) {
     setStatus(v)
@@ -785,12 +1018,12 @@ export default function ContratoEditorPage({ contrato }: Props) {
     setShowTableDialog(false)
     const r = parseInt(tableRows) || 3
     const c = parseInt(tableCols) || 3
-    editor?.chain().focus().insertTable({ rows: r, cols: c, withHeaderRow: true }).run()
+    activeEditor?.chain().focus().insertTable({ rows: r, cols: c, withHeaderRow: true }).run()
   }
 
   function handleImageUrl() {
     if (!imageUrl.trim()) return
-    editor?.chain().focus().setImage({ src: imageUrl.trim() }).run()
+    activeEditor?.chain().focus().setImage({ src: imageUrl.trim() }).run()
     setImageUrl('')
     setShowImageDialog(false)
   }
@@ -800,7 +1033,7 @@ export default function ContratoEditorPage({ contrato }: Props) {
     const reader = new FileReader()
     reader.onload = e => {
       const src = e.target?.result as string
-      editor?.chain().focus().setImage({ src }).run()
+      activeEditor?.chain().focus().setImage({ src }).run()
       setShowImageDialog(false)
     }
     reader.readAsDataURL(file)
@@ -816,12 +1049,10 @@ export default function ContratoEditorPage({ contrato }: Props) {
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; margin: 0; }
-          .print-paper { background: white !important; padding: 0 !important; max-width: 100% !important; }
+          .print-paper { box-shadow: none !important; margin-bottom: 0 !important; page-break-after: always; }
           .zone-editor { border: none !important; background: transparent !important; }
-          [data-type="page-break"] { page-break-before: always; display: block; height: 0; margin: 0; border: none; background: transparent; }
           .ProseMirror { min-height: auto !important; }
           table { page-break-inside: avoid; }
-          /* Footer shown on every printed page */
           .print-footer-bar {
             display: flex !important;
             position: fixed;
@@ -868,8 +1099,6 @@ export default function ContratoEditorPage({ contrato }: Props) {
         /* Placeholder */
         .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); float: left; color: #9ca3af; pointer-events: none; height: 0; }
       `}</style>
-
-      <FloatingToolbar editor={editor} />
 
       <div className="flex flex-col h-full">
         {/* Top bar */}
@@ -926,14 +1155,6 @@ export default function ContratoEditorPage({ contrato }: Props) {
             {saveStatus === 'idle' && lastSaved && <span>Salvo {lastSaved.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>}
           </div>
 
-          <button
-            onClick={() => { setFooterDraft(footerText); setEditingFooter(true) }}
-            className="no-print btn-secondary flex items-center gap-1.5 text-xs py-1.5 shrink-0"
-            title="Editar texto do rodapé"
-          >
-            <span className="text-[10px]">✎ Rodapé</span>
-          </button>
-
           <button onClick={() => window.print()}
             className="no-print btn-secondary flex items-center gap-1.5 text-xs py-1.5 shrink-0">
             <Printer className="w-3.5 h-3.5" />
@@ -941,15 +1162,15 @@ export default function ContratoEditorPage({ contrato }: Props) {
           </button>
         </div>
 
-        {/* Toolbar */}
+        {/* Toolbar — uses whichever page editor the user last focused */}
         <Toolbar
-          editor={editor}
+          editor={activeEditor}
           onInsertTable={() => setShowTableDialog(true)}
           onInsertImage={() => setShowImageDialog(true)}
         />
 
         {/* Document area */}
-        <div className="flex-1 overflow-y-auto" style={{ background: '#cbd5e1' }}>
+        <div className="flex-1 overflow-y-auto" style={{ background: '#e2e8f0' }}>
           <div className="py-10" style={{ paddingLeft: 60, paddingRight: 60 }}>
             <div className="mx-auto" style={{ maxWidth: 794 }}>
 
@@ -962,70 +1183,37 @@ export default function ContratoEditorPage({ contrato }: Props) {
                 icon={<LayoutTemplate className="w-3 h-3" />}
               />
 
-              {/* Paper — A4 pages (794×1122px each, 80px gap between pages) */}
-              <div
-                ref={paperRef}
-                className="print-paper relative"
-                style={{
-                  minHeight: Math.max(PAGE_H, pageCount * TILE),
-                  padding: `${PAGE_M}px`,
-                  background: 'white',
-                  boxShadow: '0 2px 16px rgba(0,0,0,0.12)',
-                }}
-              >
-                <EditorContent editor={editor} />
+              {/* Pages — each is a real A4 card with overflow:hidden */}
+              {!pagesReady ? (
+                <div style={{ background: 'white', boxShadow: '0 2px 16px rgba(0,0,0,0.10)', height: PAGE_H, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                </div>
+              ) : pages.map((pageHtml, i) => (
+                <PageEditorInstance
+                  key={i}
+                  initialContent={pageHtml}
+                  pageIndex={i}
+                  totalPages={pages.length}
+                  footerText={footerText}
+                  onFooterChange={text => setFooterText(text)}
+                  onUpdate={html => handlePageUpdate(html, i)}
+                  onFocus={ed => setActiveEditor(ed)}
+                  contratoId={contrato.id}
+                />
+              ))}
 
-                {/* Gap overlays — cover content that bleeds between pages */}
-                {Array.from({ length: Math.max(0, pageCount - 1) }, (_, i) => (
-                  <div
-                    key={`gap-${i}`}
-                    className="no-print"
-                    style={{
-                      position: 'absolute',
-                      top: (i + 1) * TILE - GAP,
-                      left: 0, right: 0,
-                      height: GAP,
-                      background: `linear-gradient(to bottom,
-                        rgba(0,0,0,0.10) 0px,
-                        #cbd5e1 5px,
-                        #cbd5e1 ${GAP - 5}px,
-                        rgba(0,0,0,0.06) ${GAP - 5}px,
-                        rgba(0,0,0,0) ${GAP}px
-                      )`,
-                      zIndex: 10,
-                      pointerEvents: 'none',
-                    }}
-                  />
-                ))}
-
-                {/* Page footer overlays — appear at bottom of each A4 page */}
-                {Array.from({ length: pageCount }, (_, i) => (
-                  <div
-                    key={`footer-${i}`}
-                    className="no-print"
-                    style={{
-                      position: 'absolute',
-                      top: i * TILE + FOOTER_TOP_IN_TILE,
-                      left: 0, right: 0,
-                      zIndex: 8,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: `0 ${PAGE_M}px`,
-                      fontSize: '8pt',
-                      color: '#94a3b8',
-                      pointerEvents: 'none',
-                      userSelect: 'none',
-                      borderTop: '0.5px solid #cbd5e1',
-                    }}
+              {/* Add page button */}
+              {pagesReady && (
+                <div className="no-print flex justify-center mb-6">
+                  <button
+                    onClick={handleAddPage}
+                    className="flex items-center gap-2 px-6 py-3 text-sm text-gray-500 hover:text-blue-600 transition-colors"
+                    style={{ background: 'white', border: '2px dashed #d1d5db', borderRadius: 12 }}
                   >
-                    <span style={{ maxWidth: '76%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {footerText}
-                    </span>
-                    <span>Página {i + 1} de {pageCount}</span>
-                  </div>
-                ))}
-              </div>
+                    + Adicionar página
+                  </button>
+                </div>
+              )}
 
               {/* Footer zone */}
               <ZoneEditor
@@ -1106,32 +1294,6 @@ export default function ContratoEditorPage({ contrato }: Props) {
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f) }} />
             </div>
             <button onClick={() => setShowImageDialog(false)} className="btn-secondary w-full mt-4">Cancelar</button>
-          </div>
-        </div>
-      )}
-
-      {/* Footer text editor modal */}
-      {editingFooter && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/40" onClick={() => setEditingFooter(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl z-10 p-6 w-[440px]">
-            <h3 className="font-bold text-gray-900 mb-1">Texto do Rodapé</h3>
-            <p className="text-xs text-gray-400 mb-3">Aparece no rodapé de cada página, junto com o número da página.</p>
-            <input
-              autoFocus
-              className="input w-full mb-4"
-              value={footerDraft}
-              onChange={e => setFooterDraft(e.target.value)}
-              placeholder="Ex: Contrato de Prestação de Serviços — Condomínio Vania Morato"
-            />
-            <div className="flex gap-2">
-              <button onClick={() => setEditingFooter(false)} className="btn-secondary flex-1">Cancelar</button>
-              <button onClick={() => {
-                setFooterText(footerDraft)
-                if (typeof window !== 'undefined') localStorage.setItem(`ft-${contrato.id}`, footerDraft)
-                setEditingFooter(false)
-              }} className="btn-primary flex-1">Salvar</button>
-            </div>
           </div>
         </div>
       )}
