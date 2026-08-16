@@ -1,0 +1,1146 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import Link from 'next/link'
+import {
+  useEditor, EditorContent, NodeViewWrapper,
+  ReactNodeViewRenderer, Node, Extension, mergeAttributes,
+} from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import TextAlign from '@tiptap/extension-text-align'
+import Underline from '@tiptap/extension-underline'
+import { TextStyle } from '@tiptap/extension-text-style'
+import { Color } from '@tiptap/extension-color'
+import Placeholder from '@tiptap/extension-placeholder'
+import { FontFamily } from '@tiptap/extension-font-family'
+import Image from '@tiptap/extension-image'
+import Highlight from '@tiptap/extension-highlight'
+import Subscript from '@tiptap/extension-subscript'
+import Superscript from '@tiptap/extension-superscript'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableCell } from '@tiptap/extension-table-cell'
+import { TableHeader } from '@tiptap/extension-table-header'
+import {
+  ArrowLeft, Bold, Italic, Underline as LucideUnderline, Strikethrough,
+  List, ListOrdered, AlignLeft, AlignCenter, AlignRight, AlignJustify,
+  Undo2, Redo2, Printer, CheckCircle, Loader2, ChevronDown,
+  Table2, Image as ImageIcon, Minus,
+  Scissors, ChevronUp, Layout as LayoutTemplate,
+  Trash2, PanelBottom,
+  Highlighter,
+} from 'lucide-react'
+import { saveContrato, updateContratoStatus, updateContratoTitle, saveContratoHeader, saveContratoFooter } from '@/app/(crm)/contratos/actions'
+
+// ── Custom: Font Size ─────────────────────────────────────────────────────────
+
+const FontSize = Extension.create({
+  name: 'fontSize',
+  addGlobalAttributes() {
+    return [{
+      types: ['textStyle'],
+      attributes: {
+        fontSize: {
+          default: null,
+          parseHTML: el => el.style.fontSize || null,
+          renderHTML: attrs => attrs.fontSize ? { style: `font-size: ${attrs.fontSize}` } : {},
+        },
+      },
+    }]
+  },
+  addCommands() {
+    return {
+      setFontSize: (size: string) => ({ chain }: any) =>
+        chain().setMark('textStyle', { fontSize: size }).run(),
+      unsetFontSize: () => ({ chain }: any) =>
+        chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run(),
+    }
+  },
+})
+
+// ── Custom: Page Break ────────────────────────────────────────────────────────
+
+function PageBreakView() {
+  return (
+    <NodeViewWrapper>
+      <div
+        contentEditable={false}
+        style={{ margin: '0 -5rem', userSelect: 'none' }}
+        className="flex items-center gap-3 bg-gray-200 py-4 px-8"
+      >
+        <div className="flex-1 border-t border-dashed border-gray-400" />
+        <span className="text-[11px] text-gray-500 font-medium tracking-wide uppercase font-sans whitespace-nowrap flex items-center gap-1.5">
+          ✂ Quebra de Página
+        </span>
+        <div className="flex-1 border-t border-dashed border-gray-400" />
+      </div>
+    </NodeViewWrapper>
+  )
+}
+
+const PageBreak = Node.create({
+  name: 'pageBreak',
+  group: 'block',
+  atom: true,
+  draggable: true,
+  parseHTML() { return [{ tag: 'div[data-type="page-break"]' }] },
+  renderHTML() { return ['div', { 'data-type': 'page-break', class: 'page-break' }] },
+  addNodeView() { return ReactNodeViewRenderer(PageBreakView) },
+  addCommands(): any {
+    return { insertPageBreak: () => ({ commands }: any) => commands.insertContent({ type: 'pageBreak' }) }
+  },
+  addKeyboardShortcuts(): any {
+    return {
+      'Ctrl-Enter': () => (this.editor.chain() as any).insertPageBreak().run(),
+      'Mod-Enter': () => (this.editor.chain() as any).insertPageBreak().run(),
+    }
+  },
+})
+
+// ── Custom: TableCell with backgroundColor ────────────────────────────────────
+
+const CustomTableCell = TableCell.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      backgroundColor: {
+        default: null,
+        parseHTML: el => el.style.backgroundColor || null,
+        renderHTML: attrs => attrs.backgroundColor ? { style: `background-color: ${attrs.backgroundColor}` } : {},
+      },
+      borderColor: {
+        default: null,
+        parseHTML: el => el.style.borderColor || null,
+        renderHTML: attrs => attrs.borderColor ? { style: `border-color: ${attrs.borderColor}` } : {},
+      },
+    }
+  },
+})
+
+const CustomTableHeader = TableHeader.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      backgroundColor: {
+        default: null,
+        parseHTML: el => el.style.backgroundColor || null,
+        renderHTML: attrs => attrs.backgroundColor ? { style: `background-color: ${attrs.backgroundColor}` } : {},
+      },
+    }
+  },
+})
+
+// ── Shared extension set ──────────────────────────────────────────────────────
+
+function makeExtensions(placeholder = '') {
+  return [
+    StarterKit.configure({ heading: { levels: [1, 2, 3, 4] } }),
+    TextAlign.configure({ types: ['heading', 'paragraph'] }),
+    Underline, TextStyle, Color, Highlight.configure({ multicolor: true }),
+    Subscript, Superscript, FontFamily, FontSize, PageBreak,
+    Image.configure({ allowBase64: true, HTMLAttributes: { class: 'doc-img' } }),
+    Table.configure({ resizable: true }),
+    TableRow, CustomTableHeader, CustomTableCell,
+    Placeholder.configure({ placeholder }),
+  ]
+}
+
+// ── Toolbar helpers ───────────────────────────────────────────────────────────
+
+function Sep() { return <span className="w-px h-5 bg-gray-200 mx-1 shrink-0" /> }
+
+function Btn({
+  active, disabled, onClick, title, children,
+}: { active?: boolean; disabled?: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button" onMouseDown={e => { e.preventDefault(); onClick() }}
+      disabled={disabled}
+      title={title}
+      className={`p-1.5 rounded-lg transition-colors shrink-0 ${active ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'} disabled:opacity-30`}
+    >
+      {children}
+    </button>
+  )
+}
+
+const FONTS = [
+  { label: 'Georgia',          value: 'Georgia, serif' },
+  { label: 'Times New Roman',  value: '"Times New Roman", Times, serif' },
+  { label: 'Arial',            value: 'Arial, sans-serif' },
+  { label: 'Calibri',          value: 'Calibri, sans-serif' },
+  { label: 'Verdana',          value: 'Verdana, sans-serif' },
+  { label: 'Courier New',      value: '"Courier New", monospace' },
+]
+const SIZES = ['8pt','9pt','10pt','11pt','12pt','13pt','14pt','16pt','18pt','20pt','22pt','24pt','28pt','32pt','36pt','48pt','72pt']
+const STYLES = [
+  { label: 'Normal',   cmd: (e: any) => e.chain().focus().setParagraph().run() },
+  { label: 'Título 1', cmd: (e: any) => e.chain().focus().toggleHeading({ level: 1 }).run() },
+  { label: 'Título 2', cmd: (e: any) => e.chain().focus().toggleHeading({ level: 2 }).run() },
+  { label: 'Título 3', cmd: (e: any) => e.chain().focus().toggleHeading({ level: 3 }).run() },
+  { label: 'Título 4', cmd: (e: any) => e.chain().focus().toggleHeading({ level: 4 }).run() },
+]
+const COLORS = ['#000000','#374151','#6b7280','#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#ffffff']
+const HIGHLIGHTS = ['#fef08a','#bbf7d0','#bfdbfe','#fecaca','#e9d5ff','#fed7aa','#f0fdf4','transparent']
+const CELL_COLORS = ['transparent','#f3f4f6','#fef08a','#bbf7d0','#bfdbfe','#fecaca','#e9d5ff','#fed7aa','#f97316','#22c55e','#3b82f6','#8b5cf6']
+const BULLET_STYLES = [
+  { style: 'disc',   label: '● Disco (padrão)' },
+  { style: 'circle', label: '○ Círculo' },
+  { style: 'square', label: '■ Quadrado' },
+]
+const NUMBER_STYLES = [
+  { type: '1', label: '1. 2. 3. — Números' },
+  { type: 'a', label: 'a. b. c. — Letras min.' },
+  { type: 'A', label: 'A. B. C. — Letras mai.' },
+  { type: 'i', label: 'i. ii. iii. — Romano min.' },
+  { type: 'I', label: 'I. II. III. — Romano mai.' },
+]
+
+function Dropdown({ label, children, small }: { label: string; children: (close: () => void) => React.ReactNode; small?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const close = () => setOpen(false)
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onMouseDown={e => { e.preventDefault(); setOpen(v => !v) }}
+        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-gray-700 hover:bg-gray-100 text-xs font-medium ${small ? 'min-w-[40px]' : 'min-w-[80px]'}`}
+      >
+        <span className="truncate">{label}</span>
+        <ChevronDown className="w-3 h-3 shrink-0 text-gray-400" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={close} />
+          <div className="absolute top-full left-0 mt-1 bg-white rounded-xl border border-gray-100 shadow-xl z-50 overflow-hidden"
+            style={{ minWidth: small ? 70 : 160 }}>
+            {children(close)}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── Main toolbar ──────────────────────────────────────────────────────────────
+
+function Toolbar({
+  editor, onInsertTable, onInsertImage,
+}: { editor: ReturnType<typeof useEditor> | null; onInsertTable: () => void; onInsertImage: () => void }) {
+  const [colorOpen, setColorOpen] = useState(false)
+  const [hlOpen, setHlOpen] = useState(false)
+  const [cellBgOpen, setCellBgOpen] = useState(false)
+  // force re-render whenever editor state changes (selection, marks, nodes)
+  const [, forceRender] = useState(0)
+  useEffect(() => {
+    if (!editor) return
+    const update = () => forceRender(n => n + 1)
+    editor.on('transaction', update)
+    editor.on('selectionUpdate', update)
+    return () => { editor.off('transaction', update); editor.off('selectionUpdate', update) }
+  }, [editor])
+
+  if (!editor) return null
+
+  const curFont = editor.getAttributes('textStyle').fontFamily || FONTS[0].value
+  const curSize = editor.getAttributes('textStyle').fontSize || '12pt'
+  const curStyle = editor.isActive('heading', { level: 1 }) ? 'Título 1'
+    : editor.isActive('heading', { level: 2 }) ? 'Título 2'
+    : editor.isActive('heading', { level: 3 }) ? 'Título 3'
+    : editor.isActive('heading', { level: 4 }) ? 'Título 4'
+    : 'Normal'
+
+  return (
+    <div className="no-print bg-white border-b border-gray-100 px-3 py-1.5 flex items-center gap-0.5 flex-wrap" style={{ overflow: 'visible' }}>
+      {/* History */}
+      <Btn onClick={() => editor.chain().focus().undo().run()} title="Desfazer (Ctrl+Z)"><Undo2 className="w-3.5 h-3.5" /></Btn>
+      <Btn onClick={() => editor.chain().focus().redo().run()} title="Refazer (Ctrl+Y)"><Redo2 className="w-3.5 h-3.5" /></Btn>
+      <Sep />
+
+      {/* Style */}
+      <Dropdown label={curStyle}>
+        {(close) => STYLES.map(s => (
+          <button key={s.label} type="button" className="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50"
+            onMouseDown={e => { e.preventDefault(); s.cmd(editor); close() }}>{s.label}</button>
+        ))}
+      </Dropdown>
+
+      {/* Font family */}
+      <Dropdown label={FONTS.find(f => f.value === curFont)?.label ?? 'Fonte'}>
+        {(close) => FONTS.map(f => (
+          <button key={f.value} type="button" style={{ fontFamily: f.value }}
+            className="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50"
+            onMouseDown={e => { e.preventDefault(); editor.chain().focus().setFontFamily(f.value).run(); close() }}
+          >{f.label}</button>
+        ))}
+      </Dropdown>
+
+      {/* Font size */}
+      <Dropdown label={curSize} small>
+        {(close) => (
+          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+            {SIZES.map(s => (
+              <button key={s} type="button"
+                className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 ${curSize === s ? 'font-bold text-blue-600' : ''}`}
+                onMouseDown={e => { e.preventDefault(); (editor.chain().focus() as any).setFontSize(s).run(); close() }}
+              >{s}</button>
+            ))}
+          </div>
+        )}
+      </Dropdown>
+      <Sep />
+
+      {/* Formatting */}
+      <Btn active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="Negrito"><Bold className="w-3.5 h-3.5" /></Btn>
+      <Btn active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} title="Itálico"><Italic className="w-3.5 h-3.5" /></Btn>
+      <Btn active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()} title="Sublinhado"><LucideUnderline className="w-3.5 h-3.5" /></Btn>
+      <Btn active={editor.isActive('strike')} onClick={() => editor.chain().focus().toggleStrike().run()} title="Tachado"><Strikethrough className="w-3.5 h-3.5" /></Btn>
+      <Btn active={editor.isActive('subscript')} onClick={() => editor.chain().focus().toggleSubscript().run()} title="Subscrito"><span className="text-xs font-bold leading-none">X₂</span></Btn>
+      <Btn active={editor.isActive('superscript')} onClick={() => editor.chain().focus().toggleSuperscript().run()} title="Sobrescrito"><span className="text-xs font-bold leading-none">X²</span></Btn>
+      <Sep />
+
+      {/* Text color */}
+      <div className="relative">
+        <button
+          type="button"
+          onMouseDown={e => { e.preventDefault(); setColorOpen(v => !v) }}
+          className="p-1.5 rounded-lg hover:bg-gray-100 flex flex-col items-center gap-0.5"
+          title="Cor do texto"
+        >
+          <span className="text-xs font-bold leading-none text-gray-700">A</span>
+          <span className="w-3.5 h-0.5 rounded" style={{ background: editor.getAttributes('textStyle').color || '#000' }} />
+        </button>
+        {colorOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setColorOpen(false)} />
+            <div className="absolute top-full left-0 mt-1 bg-white rounded-xl border border-gray-100 shadow-xl z-50 p-2">
+              <div className="grid grid-cols-6 gap-1 mb-1">
+                {COLORS.map(c => (
+                  <button key={c} type="button" className="w-5 h-5 rounded border border-gray-200 hover:scale-110 transition-transform"
+                    style={{ background: c }}
+                    onMouseDown={e => { e.preventDefault(); editor.chain().focus().setColor(c).run(); setColorOpen(false) }}
+                  />
+                ))}
+              </div>
+              <label className="flex items-center gap-1 mt-1">
+                <span className="text-[10px] text-gray-500">Outra:</span>
+                <input type="color" className="w-6 h-5 cursor-pointer border-0"
+                  onChange={e => editor.chain().focus().setColor(e.target.value).run()} />
+              </label>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Highlight */}
+      <div className="relative">
+        <button
+          type="button"
+          onMouseDown={e => { e.preventDefault(); setHlOpen(v => !v) }}
+          className="p-1.5 rounded-lg hover:bg-gray-100 flex flex-col items-center gap-0.5"
+          title="Destaque"
+        >
+          <Highlighter className="w-3.5 h-3.5 text-gray-600" />
+        </button>
+        {hlOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setHlOpen(false)} />
+            <div className="absolute top-full left-0 mt-1 bg-white rounded-xl border border-gray-100 shadow-xl z-50 p-2">
+              <div className="flex gap-1 flex-wrap w-32">
+                {HIGHLIGHTS.map(c => (
+                  <button key={c} type="button"
+                    className="w-6 h-6 rounded border border-gray-200 hover:scale-110 transition-transform"
+                    style={{ background: c === 'transparent' ? 'white' : c }}
+                    onMouseDown={e => {
+                      e.preventDefault()
+                      if (c === 'transparent') editor.chain().focus().unsetHighlight().run()
+                      else editor.chain().focus().setHighlight({ color: c }).run()
+                      setHlOpen(false)
+                    }}
+                  >
+                    {c === 'transparent' && <span className="text-[9px] text-gray-500">✕</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      <Sep />
+
+      {/* Lists */}
+      <Btn active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()} title="Lista com marcadores"><List className="w-3.5 h-3.5" /></Btn>
+      <Dropdown label="•" small>
+        {(close) => (
+          <div className="py-1">
+            <div className="px-3 py-1 text-[10px] text-gray-400 uppercase tracking-wide font-medium">Marcadores</div>
+            {BULLET_STYLES.map(s => (
+              <button key={s.style} type="button"
+                className="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50"
+                onMouseDown={e => {
+                  e.preventDefault()
+                  const chain = editor.chain().focus()
+                  if (!editor.isActive('bulletList')) chain.toggleBulletList()
+                  // Apply list-style via DOM since StarterKit doesn't have listStyleType attribute
+                  chain.run()
+                  setTimeout(() => {
+                    const uls = editor.view.dom.querySelectorAll('ul')
+                    const { from } = editor.state.selection
+                    const domPos = editor.view.domAtPos(from)
+                    const el = domPos.node as HTMLElement
+                    const ul = el.closest?.('ul') ?? el.querySelector?.('ul') ?? uls[uls.length - 1]
+                    if (ul) (ul as HTMLUListElement).style.listStyleType = s.style
+                  }, 0)
+                  close()
+                }}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </Dropdown>
+      <Btn active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Lista numerada"><ListOrdered className="w-3.5 h-3.5" /></Btn>
+      <Dropdown label="1." small>
+        {(close) => (
+          <div className="py-1">
+            <div className="px-3 py-1 text-[10px] text-gray-400 uppercase tracking-wide font-medium">Numeração</div>
+            {NUMBER_STYLES.map(s => (
+              <button key={s.type} type="button"
+                className="block w-full text-left px-3 py-2 text-xs hover:bg-gray-50"
+                onMouseDown={e => {
+                  e.preventDefault()
+                  const chain = editor.chain().focus()
+                  if (!editor.isActive('orderedList')) chain.toggleOrderedList()
+                  chain.run()
+                  setTimeout(() => {
+                    const ols = editor.view.dom.querySelectorAll('ol')
+                    const { from } = editor.state.selection
+                    const domPos = editor.view.domAtPos(from)
+                    const el = domPos.node as HTMLElement
+                    const ol = el.closest?.('ol') ?? el.querySelector?.('ol') ?? ols[ols.length - 1]
+                    if (ol) ol.setAttribute('type', s.type)
+                  }, 0)
+                  close()
+                }}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </Dropdown>
+      <Btn active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Citação">
+        <span className="text-xs font-bold">❝</span>
+      </Btn>
+      <Sep />
+
+      {/* Alignment */}
+      <Btn active={editor.isActive({ textAlign: 'left' })} onClick={() => editor.chain().focus().setTextAlign('left').run()} title="Esquerda"><AlignLeft className="w-3.5 h-3.5" /></Btn>
+      <Btn active={editor.isActive({ textAlign: 'center' })} onClick={() => editor.chain().focus().setTextAlign('center').run()} title="Centro"><AlignCenter className="w-3.5 h-3.5" /></Btn>
+      <Btn active={editor.isActive({ textAlign: 'right' })} onClick={() => editor.chain().focus().setTextAlign('right').run()} title="Direita"><AlignRight className="w-3.5 h-3.5" /></Btn>
+      <Btn active={editor.isActive({ textAlign: 'justify' })} onClick={() => editor.chain().focus().setTextAlign('justify').run()} title="Justificar"><AlignJustify className="w-3.5 h-3.5" /></Btn>
+      <Sep />
+
+      {/* Insert */}
+      <Btn onClick={onInsertTable} title="Inserir tabela"><Table2 className="w-3.5 h-3.5" /></Btn>
+      <Btn onClick={onInsertImage} title="Inserir imagem"><ImageIcon className="w-3.5 h-3.5" /></Btn>
+      <Btn onClick={() => (editor.chain().focus() as any).insertPageBreak().run()} title="Quebra de página">
+        <Scissors className="w-3.5 h-3.5" />
+      </Btn>
+      <Btn onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Linha horizontal"><Minus className="w-3.5 h-3.5" /></Btn>
+
+      {/* Table context tools */}
+      {editor.isActive('table') && (
+        <>
+          <Sep />
+          <span className="text-[10px] text-gray-400 font-medium ml-1">Tabela:</span>
+          <Btn onClick={() => editor.chain().focus().addRowBefore().run()} title="Linha acima">
+            <span className="text-[10px] font-bold">L↑</span>
+          </Btn>
+          <Btn onClick={() => editor.chain().focus().addRowAfter().run()} title="Linha abaixo">
+            <span className="text-[10px] font-bold">L↓</span>
+          </Btn>
+          <Btn onClick={() => editor.chain().focus().deleteRow().run()} title="Excluir linha">
+            <span className="text-[10px] font-bold text-red-500">-L</span>
+          </Btn>
+          <Btn onClick={() => editor.chain().focus().addColumnBefore().run()} title="Coluna antes">
+            <span className="text-[10px] font-bold">C←</span>
+          </Btn>
+          <Btn onClick={() => editor.chain().focus().addColumnAfter().run()} title="Coluna depois">
+            <span className="text-[10px] font-bold">C→</span>
+          </Btn>
+          <Btn onClick={() => editor.chain().focus().deleteColumn().run()} title="Excluir coluna">
+            <span className="text-[10px] font-bold text-red-500">-C</span>
+          </Btn>
+          <Btn onClick={() => editor.chain().focus().mergeCells().run()} title="Mesclar células">
+            <span className="text-[10px] font-bold">⊞</span>
+          </Btn>
+          <Btn onClick={() => editor.chain().focus().splitCell().run()} title="Dividir célula">
+            <span className="text-[10px] font-bold">⊟</span>
+          </Btn>
+          {/* Cell background color */}
+          <div className="relative">
+            <button
+              type="button"
+              onMouseDown={e => { e.preventDefault(); setCellBgOpen(v => !v) }}
+              className="p-1.5 rounded-lg hover:bg-gray-100 flex flex-col items-center gap-0.5"
+              title="Cor de fundo da célula"
+            >
+              <span className="text-[10px] font-bold text-gray-700 leading-none">▣</span>
+              <span className="text-[8px] text-gray-400 leading-none">BG</span>
+            </button>
+            {cellBgOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setCellBgOpen(false)} />
+                <div className="absolute top-full left-0 mt-1 bg-white rounded-xl border border-gray-100 shadow-xl z-50 p-3 min-w-[160px]">
+                  <p className="text-[10px] text-gray-400 mb-2 font-medium uppercase tracking-wide">Fundo da célula</p>
+                  <div className="grid grid-cols-6 gap-1 mb-2">
+                    {CELL_COLORS.map(c => (
+                      <button key={c} type="button"
+                        className="w-5 h-5 rounded border border-gray-200 hover:scale-110 transition-transform relative"
+                        style={{ background: c === 'transparent' ? 'white' : c }}
+                        onMouseDown={e => {
+                          e.preventDefault()
+                          if (c === 'transparent') {
+                            editor.chain().focus().updateAttributes('tableCell', { backgroundColor: null }).run()
+                            editor.chain().focus().updateAttributes('tableHeader', { backgroundColor: null }).run()
+                          } else {
+                            editor.chain().focus().updateAttributes('tableCell', { backgroundColor: c }).run()
+                            editor.chain().focus().updateAttributes('tableHeader', { backgroundColor: c }).run()
+                          }
+                          setCellBgOpen(false)
+                        }}
+                      >
+                        {c === 'transparent' && <span className="absolute inset-0 flex items-center justify-center text-[8px] text-gray-400">✕</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="flex items-center gap-1">
+                    <span className="text-[10px] text-gray-500">Outra:</span>
+                    <input type="color" className="w-6 h-5 cursor-pointer border-0"
+                      onChange={e => {
+                        editor.chain().focus().updateAttributes('tableCell', { backgroundColor: e.target.value }).run()
+                        editor.chain().focus().updateAttributes('tableHeader', { backgroundColor: e.target.value }).run()
+                      }} />
+                  </label>
+                </div>
+              </>
+            )}
+          </div>
+          <Btn onClick={() => editor.chain().focus().deleteTable().run()} title="Excluir tabela">
+            <Trash2 className="w-3 h-3 text-red-500" />
+          </Btn>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── Mini header/footer editor ─────────────────────────────────────────────────
+
+function ZoneEditor({
+  label, placeholder, content, onSave, icon,
+}: { label: string; placeholder: string; content: string | null; onSave: (html: string) => void; icon: React.ReactNode }) {
+  const [visible, setVisible] = useState(!!content)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const ed = useEditor({
+    extensions: [
+      StarterKit.configure({ heading: false }),
+      TextAlign.configure({ types: ['paragraph'] }),
+      Underline, TextStyle, Color, FontFamily, FontSize,
+      Placeholder.configure({ placeholder }),
+    ],
+    content: content ?? '',
+    onUpdate: ({ editor }) => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      saveTimer.current = setTimeout(() => onSave(editor.getHTML()), 1500)
+    },
+  })
+
+  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current) }, [])
+
+  return (
+    <div className={`zone-editor border-x border-gray-200 ${label === 'Cabeçalho' ? 'border-t rounded-t-none' : 'border-b rounded-b-none'}`}
+      style={{ background: label === 'Cabeçalho' ? '#f8faff' : '#fafaf8' }}>
+      <button
+        type="button"
+        onClick={() => setVisible(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-2 text-xs font-medium text-gray-500 hover:text-gray-700"
+      >
+        <span className="flex items-center gap-1.5">{icon} {label}</span>
+        {visible ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+      </button>
+      {visible && (
+        <div className="border-t border-dashed border-gray-300 px-20 py-3">
+          <EditorContent editor={ed} className="min-h-[40px] text-sm text-gray-600 outline-none" />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Floating selection toolbar ────────────────────────────────────────────────
+
+function FloatingToolbar({ editor }: { editor: ReturnType<typeof useEditor> | null }) {
+  const [toolbarPos, setToolbarPos] = useState<{ top: number; left: number } | null>(null)
+  const [editorState, setEditorState] = useState(0)
+
+  useEffect(() => {
+    if (!editor) return
+    const update = () => {
+      const { selection } = editor.state
+      const { from, to } = selection
+      if (from === to) { setToolbarPos(null); return }
+      try {
+        const start = editor.view.coordsAtPos(from)
+        const end = editor.view.coordsAtPos(to)
+        setToolbarPos({
+          top: Math.min(start.top, end.top) - 4,
+          left: (start.left + end.right) / 2,
+        })
+      } catch { setToolbarPos(null) }
+      setEditorState(n => n + 1)
+    }
+    editor.on('selectionUpdate', update)
+    editor.on('transaction', update)
+    return () => { editor.off('selectionUpdate', update); editor.off('transaction', update) }
+  }, [editor])
+
+  if (!editor || !toolbarPos) return null
+
+  return createPortal(
+    <div
+      style={{ position: 'fixed', top: toolbarPos.top, left: toolbarPos.left, transform: 'translate(-50%, -100%)', zIndex: 9999 }}
+      onMouseDown={e => e.preventDefault()}
+    >
+      <div className="flex items-center gap-0.5 bg-gray-900 text-white rounded-xl px-1.5 py-1.5 shadow-2xl border border-gray-700/60" style={{ backdropFilter: 'blur(4px)' }}>
+        <button type="button"
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleBold().run() }}
+          className={`px-2 py-1 rounded-lg text-xs font-bold transition-colors ${editor.isActive('bold') ? 'bg-white/20' : 'hover:bg-white/10'}`}
+          title="Negrito (Ctrl+B)">N</button>
+        <button type="button"
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleItalic().run() }}
+          className={`px-2 py-1 rounded-lg text-xs italic transition-colors ${editor.isActive('italic') ? 'bg-white/20' : 'hover:bg-white/10'}`}
+          title="Itálico (Ctrl+I)">I</button>
+        <button type="button"
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleUnderline().run() }}
+          className={`px-2 py-1 rounded-lg text-xs underline transition-colors ${editor.isActive('underline') ? 'bg-white/20' : 'hover:bg-white/10'}`}
+          title="Sublinhado (Ctrl+U)">S</button>
+        <button type="button"
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleStrike().run() }}
+          className={`px-2 py-1 rounded-lg text-xs line-through transition-colors ${editor.isActive('strike') ? 'bg-white/20' : 'hover:bg-white/10'}`}
+          title="Tachado">T</button>
+        <div className="w-px h-4 bg-white/20 mx-0.5" />
+        <button type="button"
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 1 }).run() }}
+          className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${editor.isActive('heading', { level: 1 }) ? 'bg-white/20' : 'hover:bg-white/10'}`}
+          title="Título 1">H1</button>
+        <button type="button"
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 2 }).run() }}
+          className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${editor.isActive('heading', { level: 2 }) ? 'bg-white/20' : 'hover:bg-white/10'}`}
+          title="Título 2">H2</button>
+        <button type="button"
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 3 }).run() }}
+          className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${editor.isActive('heading', { level: 3 }) ? 'bg-white/20' : 'hover:bg-white/10'}`}
+          title="Título 3">H3</button>
+        <div className="w-px h-4 bg-white/20 mx-0.5" />
+        <button type="button"
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().setTextAlign('left').run() }}
+          className={`px-1.5 py-1 rounded-lg text-[10px] transition-colors ${editor.isActive({ textAlign: 'left' }) ? 'bg-white/20' : 'hover:bg-white/10'}`}
+          title="Esquerda">◀</button>
+        <button type="button"
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().setTextAlign('center').run() }}
+          className={`px-1.5 py-1 rounded-lg text-[10px] transition-colors ${editor.isActive({ textAlign: 'center' }) ? 'bg-white/20' : 'hover:bg-white/10'}`}
+          title="Centralizar">⦿</button>
+        <button type="button"
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().setTextAlign('justify').run() }}
+          className={`px-1.5 py-1 rounded-lg text-[10px] transition-colors ${editor.isActive({ textAlign: 'justify' }) ? 'bg-white/20' : 'hover:bg-white/10'}`}
+          title="Justificar">▶</button>
+        <div className="w-px h-4 bg-white/20 mx-0.5" />
+        <button type="button"
+          onMouseDown={e => { e.preventDefault(); editor.chain().focus().unsetAllMarks().run() }}
+          className="px-2 py-1 rounded-lg text-[10px] hover:bg-white/10 transition-colors"
+          title="Limpar formatação">✕</button>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+// ── Status config ─────────────────────────────────────────────────────────────
+
+const STATUS_OPTS = [
+  { value: 'rascunho', label: 'Rascunho', badge: 'bg-gray-100 text-gray-600' },
+  { value: 'ativo',    label: 'Ativo',    badge: 'bg-blue-100 text-blue-700'  },
+  { value: 'assinado', label: 'Assinado', badge: 'bg-emerald-100 text-emerald-700' },
+  { value: 'cancelado',label: 'Cancelado',badge: 'bg-red-100 text-red-600'   },
+]
+
+// ── A4 page constants (96dpi) ─────────────────────────────────────────────────
+const PAGE_H  = 1122   // A4 height px
+const PAGE_M  = 80     // margin top/bottom px
+const CONTENT = PAGE_H - PAGE_M * 2  // 962px usable content per page
+const GAP     = 80     // visual gap between pages
+const TILE    = PAGE_H + GAP          // 1202px per tile
+const FOOTER_TOP_IN_TILE = PAGE_H - PAGE_M + 8  // y of footer label within tile
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+interface Props {
+  contrato: {
+    id: string
+    contract_number: string | null
+    title: string
+    content: string | null
+    header_content: string | null
+    footer_content: string | null
+    status: string
+    leads: { name: string; company: string | null } | null
+    proposals: { title: string; value: number } | null
+  }
+}
+
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+export default function ContratoEditorPage({ contrato }: Props) {
+  // derive clientName early so state initializer can use it
+  const clientName = contrato.leads?.company ?? contrato.leads?.name ?? '—'
+
+  const [title, setTitle] = useState(contrato.title)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [status, setStatus] = useState(contrato.status)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [showStatusMenu, setShowStatusMenu] = useState(false)
+  const [showTableDialog, setShowTableDialog] = useState(false)
+  const [showImageDialog, setShowImageDialog] = useState(false)
+  const [tableRows, setTableRows] = useState('3')
+  const [tableCols, setTableCols] = useState('3')
+  const [imageUrl, setImageUrl] = useState('')
+  const [pageCount, setPageCount] = useState(1)
+  const [editingFooter, setEditingFooter] = useState(false)
+  const [footerText, setFooterText] = useState(() => {
+    if (typeof window === 'undefined') return `${contrato.title} — ${clientName}`
+    return localStorage.getItem(`ft-${contrato.id}`) ?? `${contrato.title} — ${clientName}`
+  })
+  const [footerDraft, setFooterDraft] = useState(footerText)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const paperRef = useRef<HTMLDivElement>(null)
+
+  const editor = useEditor({
+    extensions: makeExtensions('Comece a editar o contrato...'),
+    content: contrato.content ?? '',
+    editorProps: {
+      attributes: {
+        class: 'outline-none',
+        style: 'font-family: Georgia, "Times New Roman", serif; font-size: 12pt; line-height: 1.75; color: #111827;',
+      },
+    },
+    onUpdate: ({ editor }) => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      setSaveStatus('saving')
+      saveTimer.current = setTimeout(async () => {
+        const res = await saveContrato(contrato.id, editor.getHTML())
+        if (res.error) { setSaveStatus('error') }
+        else { setSaveStatus('saved'); setLastSaved(new Date()); setTimeout(() => setSaveStatus('idle'), 3000) }
+      }, 1500)
+    },
+  })
+
+  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current) }, [])
+
+  // Count A4 pages and adjust padding so content fills complete pages
+  useEffect(() => {
+    if (!editor) return
+    const pm = paperRef.current?.querySelector('.ProseMirror') as HTMLElement | null
+    if (!pm) return
+    const obs = new ResizeObserver(([e]) => {
+      const h = e.contentRect.height - parseFloat(pm.style.paddingBottom || '0')
+      const pages = Math.max(1, Math.ceil(h / CONTENT))
+      setPageCount(pages)
+      // Pad ProseMirror so last page is always filled — keeps content off the gap zone
+      const overflow = h % CONTENT
+      pm.style.paddingBottom = overflow === 0 ? `${PAGE_M}px` : `${CONTENT - overflow + PAGE_M}px`
+    })
+    obs.observe(pm)
+    return () => obs.disconnect()
+  }, [editor])
+
+  async function changeStatus(v: string) {
+    setStatus(v)
+    setShowStatusMenu(false)
+    await updateContratoStatus(contrato.id, v)
+  }
+
+  async function commitTitle(t: string) {
+    const trimmed = t.trim()
+    if (!trimmed) return
+    setTitle(trimmed)
+    setEditingTitle(false)
+    await updateContratoTitle(contrato.id, trimmed)
+  }
+
+  function handleInsertTable() {
+    setShowTableDialog(false)
+    const r = parseInt(tableRows) || 3
+    const c = parseInt(tableCols) || 3
+    editor?.chain().focus().insertTable({ rows: r, cols: c, withHeaderRow: true }).run()
+  }
+
+  function handleImageUrl() {
+    if (!imageUrl.trim()) return
+    editor?.chain().focus().setImage({ src: imageUrl.trim() }).run()
+    setImageUrl('')
+    setShowImageDialog(false)
+  }
+
+  function handleImageFile(file: File) {
+    if (file.size > 2_000_000) { alert('Imagem muito grande. Use arquivos até 2MB.'); return }
+    const reader = new FileReader()
+    reader.onload = e => {
+      const src = e.target?.result as string
+      editor?.chain().focus().setImage({ src }).run()
+      setShowImageDialog(false)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const curStatusCfg = STATUS_OPTS.find(o => o.value === status) ?? STATUS_OPTS[0]
+
+  return (
+    <>
+      {/* CSS */}
+      <style>{`
+        @page { size: A4; margin: 20mm 25mm; }
+        @media print {
+          .no-print { display: none !important; }
+          body { background: white !important; margin: 0; }
+          .print-paper { background: white !important; padding: 0 !important; max-width: 100% !important; }
+          .zone-editor { border: none !important; background: transparent !important; }
+          [data-type="page-break"] { page-break-before: always; display: block; height: 0; margin: 0; border: none; background: transparent; }
+          .ProseMirror { min-height: auto !important; }
+          table { page-break-inside: avoid; }
+          /* Footer shown on every printed page */
+          .print-footer-bar {
+            display: flex !important;
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5pt 0 8pt;
+            font-size: 8pt;
+            color: #6b7280;
+            border-top: 0.5pt solid #d1d5db;
+            background: white;
+          }
+          .print-page-num::after { content: "Página " counter(page) " de " counter(pages); }
+        }
+        .print-footer-bar { display: none; }
+
+        /* Headings */
+        .ProseMirror h1 { font-size: 1.5rem; font-weight: 700; margin: 1.5rem 0 0.5rem; text-align: center; }
+        .ProseMirror h2 { font-size: 1.1rem; font-weight: 700; margin: 1.5rem 0 0.5rem; text-transform: uppercase; letter-spacing: 0.03em; }
+        .ProseMirror h3 { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 0.4rem; }
+        .ProseMirror h4 { font-size: 0.95rem; font-weight: 600; margin: 1rem 0 0.3rem; }
+        .ProseMirror p { margin: 0.35rem 0; }
+        .ProseMirror ul, .ProseMirror ol { padding-left: 1.75rem; margin: 0.5rem 0; }
+        .ProseMirror li { margin: 0.2rem 0; }
+        .ProseMirror blockquote { border-left: 3px solid #9ca3af; padding-left: 1rem; color: #6b7280; margin: 0.75rem 0; }
+        .ProseMirror hr { border: none; border-top: 1px solid #d1d5db; margin: 1.5rem 0; }
+        .ProseMirror strong { font-weight: 700; }
+        .ProseMirror em { font-style: italic; }
+        .ProseMirror u { text-decoration: underline; }
+        .ProseMirror s { text-decoration: line-through; }
+
+        /* Tables */
+        .ProseMirror table { border-collapse: collapse; width: 100%; margin: 1rem 0; table-layout: fixed; }
+        .ProseMirror td, .ProseMirror th { border: 1px solid #d1d5db; padding: 0.5rem 0.75rem; min-width: 60px; vertical-align: top; position: relative; }
+        .ProseMirror th { background: #f3f4f6; font-weight: 700; text-align: left; }
+        .ProseMirror .selectedCell::after { z-index: 2; position: absolute; content: ""; left: 0; right: 0; top: 0; bottom: 0; background: rgba(59,130,246,0.12); pointer-events: none; }
+        .ProseMirror .column-resize-handle { position: absolute; right: -2px; top: 0; bottom: 0; width: 3px; background: #3b82f6; pointer-events: none; }
+        .tableWrapper { overflow-x: auto; }
+
+        /* Images */
+        .ProseMirror .doc-img { max-width: 100%; height: auto; display: block; margin: 0.75rem 0; border-radius: 4px; cursor: pointer; }
+        .ProseMirror .doc-img.ProseMirror-selectednode { outline: 2px solid #3b82f6; outline-offset: 2px; }
+
+        /* Placeholder */
+        .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); float: left; color: #9ca3af; pointer-events: none; height: 0; }
+      `}</style>
+
+      <FloatingToolbar editor={editor} />
+
+      <div className="flex flex-col h-full">
+        {/* Top bar */}
+        <div className="no-print bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 min-w-0">
+          <Link href="/contratos" className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 shrink-0">
+            <ArrowLeft className="w-4 h-4" />
+          </Link>
+
+          <div className="flex-1 min-w-0">
+            {editingTitle ? (
+              <input autoFocus
+                className="text-sm font-semibold text-gray-900 border border-blue-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 w-full max-w-sm"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                onBlur={e => commitTitle(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') commitTitle(e.currentTarget.value); if (e.key === 'Escape') { setTitle(contrato.title); setEditingTitle(false) } }}
+              />
+            ) : (
+              <button onClick={() => setEditingTitle(true)} className="text-sm font-semibold text-gray-900 hover:text-blue-600 text-left truncate block max-w-xs">
+                {title}
+              </button>
+            )}
+            <p className="text-xs text-gray-400 truncate">
+              {contrato.contract_number && <>{contrato.contract_number} · </>}{clientName}
+            </p>
+          </div>
+
+          {/* Status */}
+          <div className="relative shrink-0">
+            <button onClick={() => setShowStatusMenu(v => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold ${curStatusCfg.badge}`}>
+              {curStatusCfg.label}<ChevronDown className="w-3 h-3" />
+            </button>
+            {showStatusMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowStatusMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg z-50 py-1 min-w-[130px]">
+                  {STATUS_OPTS.map(o => (
+                    <button key={o.value} onClick={() => changeStatus(o.value)}
+                      className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${status === o.value ? 'font-bold text-blue-600' : 'text-gray-700'}`}>
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Save status */}
+          <div className="text-[11px] text-gray-400 shrink-0 flex items-center gap-1 min-w-[70px]">
+            {saveStatus === 'saving' && <><Loader2 className="w-3 h-3 animate-spin" />Salvando</>}
+            {saveStatus === 'saved'  && <><CheckCircle className="w-3 h-3 text-emerald-500" />Salvo</>}
+            {saveStatus === 'error'  && <span className="text-red-500">Erro</span>}
+            {saveStatus === 'idle' && lastSaved && <span>Salvo {lastSaved.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>}
+          </div>
+
+          <button
+            onClick={() => { setFooterDraft(footerText); setEditingFooter(true) }}
+            className="no-print btn-secondary flex items-center gap-1.5 text-xs py-1.5 shrink-0"
+            title="Editar texto do rodapé"
+          >
+            <span className="text-[10px]">✎ Rodapé</span>
+          </button>
+
+          <button onClick={() => window.print()}
+            className="no-print btn-secondary flex items-center gap-1.5 text-xs py-1.5 shrink-0">
+            <Printer className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Imprimir</span>
+          </button>
+        </div>
+
+        {/* Toolbar */}
+        <Toolbar
+          editor={editor}
+          onInsertTable={() => setShowTableDialog(true)}
+          onInsertImage={() => setShowImageDialog(true)}
+        />
+
+        {/* Document area */}
+        <div className="flex-1 overflow-y-auto" style={{ background: '#cbd5e1' }}>
+          <div className="py-10" style={{ paddingLeft: 60, paddingRight: 60 }}>
+            <div className="mx-auto" style={{ maxWidth: 794 }}>
+
+              {/* Header zone */}
+              <ZoneEditor
+                label="Cabeçalho"
+                placeholder="Digite o cabeçalho do documento..."
+                content={contrato.header_content}
+                onSave={html => saveContratoHeader(contrato.id, html)}
+                icon={<LayoutTemplate className="w-3 h-3" />}
+              />
+
+              {/* Paper — A4 pages (794×1122px each, 80px gap between pages) */}
+              <div
+                ref={paperRef}
+                className="print-paper relative"
+                style={{
+                  minHeight: Math.max(PAGE_H, pageCount * TILE),
+                  padding: `${PAGE_M}px`,
+                  background: 'white',
+                  boxShadow: '0 2px 16px rgba(0,0,0,0.12)',
+                }}
+              >
+                <EditorContent editor={editor} />
+
+                {/* Gap overlays — cover content that bleeds between pages */}
+                {Array.from({ length: Math.max(0, pageCount - 1) }, (_, i) => (
+                  <div
+                    key={`gap-${i}`}
+                    className="no-print"
+                    style={{
+                      position: 'absolute',
+                      top: (i + 1) * TILE - GAP,
+                      left: 0, right: 0,
+                      height: GAP,
+                      background: `linear-gradient(to bottom,
+                        rgba(0,0,0,0.10) 0px,
+                        #cbd5e1 5px,
+                        #cbd5e1 ${GAP - 5}px,
+                        rgba(0,0,0,0.06) ${GAP - 5}px,
+                        rgba(0,0,0,0) ${GAP}px
+                      )`,
+                      zIndex: 10,
+                      pointerEvents: 'none',
+                    }}
+                  />
+                ))}
+
+                {/* Page footer overlays — appear at bottom of each A4 page */}
+                {Array.from({ length: pageCount }, (_, i) => (
+                  <div
+                    key={`footer-${i}`}
+                    className="no-print"
+                    style={{
+                      position: 'absolute',
+                      top: i * TILE + FOOTER_TOP_IN_TILE,
+                      left: 0, right: 0,
+                      zIndex: 8,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: `0 ${PAGE_M}px`,
+                      fontSize: '8pt',
+                      color: '#94a3b8',
+                      pointerEvents: 'none',
+                      userSelect: 'none',
+                      borderTop: '0.5px solid #cbd5e1',
+                    }}
+                  >
+                    <span style={{ maxWidth: '76%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {footerText}
+                    </span>
+                    <span>Página {i + 1} de {pageCount}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Footer zone */}
+              <ZoneEditor
+                label="Rodapé"
+                placeholder="Digite o rodapé do documento..."
+                content={contrato.footer_content}
+                onSave={html => saveContratoFooter(contrato.id, html)}
+                icon={<PanelBottom className="w-3 h-3" />}
+              />
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Table dialog */}
+      {showTableDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setShowTableDialog(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl z-10 p-6 w-72">
+            <h3 className="font-bold text-gray-900 mb-4">Inserir Tabela</h3>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="label">Linhas</label>
+                <input type="number" min="1" max="20" value={tableRows}
+                  onChange={e => setTableRows(e.target.value)}
+                  className="input text-center" />
+              </div>
+              <div>
+                <label className="label">Colunas</label>
+                <input type="number" min="1" max="10" value={tableCols}
+                  onChange={e => setTableCols(e.target.value)}
+                  className="input text-center" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setShowTableDialog(false)} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={handleInsertTable} className="btn-primary flex-1">Inserir</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image dialog */}
+      {showImageDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setShowImageDialog(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl z-10 p-6 w-80">
+            <h3 className="font-bold text-gray-900 mb-4">Inserir Imagem</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="label">URL da imagem</label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={imageUrl}
+                    onChange={e => setImageUrl(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleImageUrl()}
+                    className="input flex-1"
+                  />
+                  <button onClick={handleImageUrl} className="btn-primary text-sm px-3">OK</button>
+                </div>
+              </div>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
+                <div className="relative flex justify-center"><span className="bg-white px-2 text-xs text-gray-400">ou</span></div>
+              </div>
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="w-full border-2 border-dashed border-gray-300 rounded-xl py-6 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors flex flex-col items-center gap-2"
+              >
+                <ImageIcon className="w-6 h-6" />
+                Clique para fazer upload
+                <span className="text-[11px] text-gray-400">JPG, PNG, GIF, WebP · Máx 2MB</span>
+              </button>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f) }} />
+            </div>
+            <button onClick={() => setShowImageDialog(false)} className="btn-secondary w-full mt-4">Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {/* Footer text editor modal */}
+      {editingFooter && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setEditingFooter(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl z-10 p-6 w-[440px]">
+            <h3 className="font-bold text-gray-900 mb-1">Texto do Rodapé</h3>
+            <p className="text-xs text-gray-400 mb-3">Aparece no rodapé de cada página, junto com o número da página.</p>
+            <input
+              autoFocus
+              className="input w-full mb-4"
+              value={footerDraft}
+              onChange={e => setFooterDraft(e.target.value)}
+              placeholder="Ex: Contrato de Prestação de Serviços — Condomínio Vania Morato"
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setEditingFooter(false)} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={() => {
+                setFooterText(footerDraft)
+                if (typeof window !== 'undefined') localStorage.setItem(`ft-${contrato.id}`, footerDraft)
+                setEditingFooter(false)
+              }} className="btn-primary flex-1">Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Print-only footer — position:fixed renders on every printed page */}
+      <div className="print-footer-bar">
+        <span>{footerText}</span>
+        <span className="print-page-num" />
+      </div>
+    </>
+  )
+}
