@@ -69,38 +69,33 @@ const TILE    = PAGE_H + GAP          // 1202px per tile
 // ── Custom: Page Break ────────────────────────────────────────────────────────
 
 function PageBreakView() {
-  const wrapperRef = useRef<HTMLDivElement>(null)
-  const [fillH, setFillH] = useState(300)
-
-  useEffect(() => {
-    const el = wrapperRef.current
-    if (!el) return
-    const paper = el.closest('.print-paper') as HTMLElement | null
-    if (!paper) return
-
-    function measure() {
-      const top = el!.getBoundingClientRect().top - paper!.getBoundingClientRect().top
-      if (top <= 10) return
-      const pageIdx = Math.floor(top / TILE)
-      const nextPageStart = (pageIdx + 1) * TILE
-      setFillH(Math.max(GAP + 4, Math.ceil(nextPageStart - top)))
-    }
-
-    measure()
-    const obs = new ResizeObserver(measure)
-    obs.observe(paper)
-    return () => obs.disconnect()
-  }, [])
-
   return (
-    <NodeViewWrapper>
-      <div ref={wrapperRef} contentEditable={false} style={{ height: fillH, userSelect: 'none', display: 'block' }}>
-        <div className="no-print" style={{ paddingTop: 8, opacity: 0.35, pointerEvents: 'none' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ flex: 1, borderTop: '1px dashed #9ca3af' }} />
-            <span style={{ fontSize: 10, color: '#6b7280', fontFamily: 'sans-serif', letterSpacing: '0.05em' }}>✂ quebra de página</span>
-            <div style={{ flex: 1, borderTop: '1px dashed #9ca3af' }} />
-          </div>
+    <NodeViewWrapper contentEditable={false} style={{ display: 'block', userSelect: 'none' }}>
+      <div
+        contentEditable={false}
+        className="no-print"
+        style={{
+          height: PAGE_M * 2 + GAP,
+          marginLeft: -PAGE_M,
+          marginRight: -PAGE_M,
+          position: 'relative',
+          pointerEvents: 'none',
+        }}
+      >
+        <div style={{
+          position: 'absolute', top: PAGE_M, left: 0, right: 0, height: GAP,
+          background: '#e2e8f0',
+          boxShadow: 'inset 0 4px 10px rgba(0,0,0,0.07), inset 0 -4px 10px rgba(0,0,0,0.07)',
+        }} />
+        <div style={{
+          position: 'absolute', top: PAGE_M + GAP / 2 - 8, left: 0, right: 0,
+          display: 'flex', alignItems: 'center', gap: 8, padding: '0 24px', opacity: 0.35, zIndex: 1,
+        }}>
+          <div style={{ flex: 1, borderTop: '1px dashed #94a3b8' }} />
+          <span style={{ fontSize: 10, color: '#64748b', fontFamily: 'sans-serif', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+            ✂ quebra de página
+          </span>
+          <div style={{ flex: 1, borderTop: '1px dashed #94a3b8' }} />
         </div>
       </div>
     </NodeViewWrapper>
@@ -746,83 +741,73 @@ function FloatingToolbar({ editor }: { editor: ReturnType<typeof useEditor> | nu
   )
 }
 
-// ── Auto-paginate: split HTML into chunks that fit in one A4 content area ─────
+// ── Auto-repaginate: inserts/removes page-break nodes via ProseMirror transaction ─
 
-function autoPaginateHtml(html: string): Promise<string[]> {
-  return new Promise(resolve => {
-    if (!html || html.trim() === '' || html === '<p></p>') { resolve(['']); return }
-    const wrapper = document.createElement('div')
-    wrapper.style.cssText = [
-      'position:fixed', 'left:-99999px', 'top:0', 'visibility:hidden', 'pointer-events:none',
-      `width:${794 - PAGE_M * 2}px`,
-      'font-size:12pt', 'line-height:1.75',
-      'font-family:Georgia,"Times New Roman",serif', 'color:#111827',
-    ].join(';')
-    wrapper.innerHTML = html
-    document.body.appendChild(wrapper)
-    // Double rAF to give browser time to fully lay out the content
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      const groups: string[][] = [[]]
+function repaginate(
+  editor: NonNullable<ReturnType<typeof useEditor>>,
+  isRepaginatingRef: React.MutableRefObject<boolean>,
+) {
+  if (isRepaginatingRef.current) return
+  requestAnimationFrame(() => {
+    if (isRepaginatingRef.current || !editor?.view?.dom) return
+    isRepaginatingRef.current = true
+    try {
+      const { state, view } = editor
+      const { doc } = state
+
+      // Measure each top-level block (skip page-break nodes)
+      const allBlocks: Array<{ pos: number; size: number; isBreak: boolean; h: number }> = []
+      doc.forEach((node, offset) => {
+        const isBreak = node.type.name === 'pageBreak'
+        let h = 0
+        if (!isBreak) {
+          const el = view.nodeDOM(offset)
+          if (el instanceof HTMLElement) {
+            const cs = window.getComputedStyle(el)
+            h = el.offsetHeight + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0)
+          }
+        }
+        allBlocks.push({ pos: offset, size: node.nodeSize, isBreak, h })
+      })
+
+      const contentBlocks = allBlocks.filter(b => !b.isBreak)
+
+      // Desired break positions: before which content-block index
+      const desiredBreaks: number[] = []
       let usedH = 0
-      Array.from(wrapper.children as HTMLCollectionOf<HTMLElement>).forEach(child => {
-        const h = child.offsetHeight + 10
-        if (usedH > 0 && usedH + h > CONTENT) { groups.push([]); usedH = 0 }
-        groups[groups.length - 1].push(child.outerHTML)
+      contentBlocks.forEach(({ h }, i) => {
+        if (usedH > 0 && usedH + h > CONTENT) { desiredBreaks.push(i); usedH = 0 }
         usedH += h
       })
-      document.body.removeChild(wrapper)
-      const pages = groups.length > 0
-        ? groups.map(g => g.join('').replace(/^(\s*<p[^>]*>\s*<\/p>\s*)+/, '').replace(/(\s*<p[^>]*>\s*<\/p>\s*)+$/, '').trim() || '')
-        : ['']
-      resolve(pages)
-    }))
+
+      // Current break positions
+      const currentBreaks: number[] = []
+      let ci = 0
+      allBlocks.forEach(b => { if (b.isBreak) currentBreaks.push(ci); else ci++ })
+
+      if (
+        desiredBreaks.length === currentBreaks.length &&
+        desiredBreaks.every((v, i) => v === currentBreaks[i])
+      ) return
+
+      const tr = state.tr
+      // Delete existing breaks (reverse order)
+      allBlocks.filter(b => b.isBreak).reverse().forEach(({ pos, size }) => {
+        tr.delete(tr.mapping.map(pos), tr.mapping.map(pos + size))
+      })
+      // Find content positions in updated doc
+      const updatedPos: number[] = []
+      tr.doc.forEach((node, offset) => { if (node.type.name !== 'pageBreak') updatedPos.push(offset) })
+      // Insert breaks (reverse order)
+      ;[...desiredBreaks].reverse().forEach(idx => {
+        if (idx < updatedPos.length)
+          tr.insert(tr.mapping.map(updatedPos[idx]), state.schema.nodes.pageBreak.create())
+      })
+      if (tr.docChanged) view.dispatch(tr)
+    } finally {
+      isRepaginatingRef.current = false
+    }
   })
-}
-
-// ── Per-page editor — one independent Tiptap instance per A4 page ─────────────
-
-interface PageEditorProps {
-  initialContent: string
-  pageIndex: number
-  onUpdate: (html: string) => void
-  onFocus: (ed: NonNullable<ReturnType<typeof useEditor>>) => void
-}
-
-function PageEditorInstance({ initialContent, pageIndex, onUpdate, onFocus }: PageEditorProps) {
-  // Lock initial content so Tiptap never sees prop updates (prevents cursor reset on Enter/Backspace)
-  const initRef = useRef(initialContent)
-
-  const editor = useEditor({
-    extensions: makeExtensions(pageIndex === 0 ? 'Comece a editar o contrato...' : ''),
-    content: initRef.current,
-    editorProps: {
-      attributes: {
-        class: 'outline-none',
-        style: 'font-family:Georgia,"Times New Roman",serif;font-size:12pt;line-height:1.75;color:#111827;',
-      },
-    },
-    onUpdate: ({ editor }) => onUpdate(editor.getHTML()),
-    onFocus: ({ editor }) => onFocus(editor),
-  })
-
-  return (
-    <div className="print-paper" style={{ background: 'white', boxShadow: '0 2px 16px rgba(0,0,0,0.10)', marginBottom: GAP }}>
-      <FloatingToolbar editor={editor} />
-
-      {/* Content area: clips exactly at CONTENT bottom (no text in bottom margin) */}
-      <div style={{
-        height: PAGE_M + CONTENT,
-        overflow: 'hidden',
-        padding: `${PAGE_M}px ${PAGE_M}px 0`,
-        boxSizing: 'border-box',
-      }}>
-        <EditorContent editor={editor} />
-      </div>
-
-      {/* Bottom margin — visually part of page, unreachable by text */}
-      <div style={{ height: PAGE_M }} />
-    </div>
-  )
 }
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -866,67 +851,38 @@ export default function ContratoEditorPage({ contrato }: Props) {
   const [tableRows, setTableRows] = useState('3')
   const [tableCols, setTableCols] = useState('3')
   const [imageUrl, setImageUrl] = useState('')
-  // Pages: each entry is the HTML content of one A4 page
-  const [pages, setPages] = useState<string[]>([])
-  const [pagesReady, setPagesReady] = useState(false)
-  // Active editor: whichever page the user last clicked/typed in
-  const [activeEditor, setActiveEditor] = useState<ReturnType<typeof useEditor> | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  // Ref mirrors pages state so async save callbacks always see latest value
-  const pagesRef = useRef<string[]>([])
+  const isRepaginating = useRef(false)
+  const repaginateTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current) }, [])
+  const editor = useEditor({
+    extensions: makeExtensions('Comece a editar o contrato...'),
+    content: contrato.content ?? '',
+    editorProps: {
+      attributes: {
+        class: 'outline-none',
+        style: `font-family:Georgia,"Times New Roman",serif;font-size:12pt;line-height:1.75;color:#111827;min-height:${CONTENT}px;`,
+      },
+    },
+    onUpdate: ({ editor }) => {
+      if (isRepaginating.current) return
+      if (repaginateTimer.current) clearTimeout(repaginateTimer.current)
+      repaginateTimer.current = setTimeout(() => repaginate(editor, isRepaginating), 800)
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      setSaveStatus('saving')
+      saveTimer.current = setTimeout(async () => {
+        const res = await saveContrato(contrato.id, editor.getHTML())
+        if (res.error) setSaveStatus('error')
+        else { setSaveStatus('saved'); setLastSaved(new Date()); setTimeout(() => setSaveStatus('idle'), 3000) }
+      }, 1500)
+    },
+  })
 
-  // On mount: split stored content into per-page arrays
-  useEffect(() => {
-    const raw = contrato.content
-    if (!raw || raw.trim() === '' || raw === '<p></p>') {
-      pagesRef.current = ['']
-      setPages([''])
-      setPagesReady(true)
-      return
-    }
-    // If the content already has explicit page-break markers, split on them
-    if (raw.includes('data-type="page-break"')) {
-      const parts = raw
-        .split(/<div[^>]*data-type="page-break"[^>]*><\/div>/gi)
-        .filter(p => p.trim())
-      const result = parts.length > 0 ? parts : ['']
-      pagesRef.current = result
-      setPages(result)
-      setPagesReady(true)
-    } else {
-      // No explicit breaks — auto-distribute content across A4 pages by height
-      autoPaginateHtml(raw).then(result => {
-        pagesRef.current = result
-        setPages(result)
-        setPagesReady(true)
-      })
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  function handlePageUpdate(html: string, index: number) {
-    const next = [...pagesRef.current]
-    next[index] = html
-    pagesRef.current = next
-    setPages(next)
+  useEffect(() => () => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    setSaveStatus('saving')
-    saveTimer.current = setTimeout(async () => {
-      const combined = pagesRef.current.join('<div data-type="page-break" class="page-break"></div>')
-      const res = await saveContrato(contrato.id, combined)
-      if (res.error) setSaveStatus('error')
-      else { setSaveStatus('saved'); setLastSaved(new Date()); setTimeout(() => setSaveStatus('idle'), 3000) }
-    }, 1500)
-  }
-
-  function handleAddPage() {
-    const next = [...pagesRef.current, '']
-    pagesRef.current = next
-    setPages(next)
-  }
+    if (repaginateTimer.current) clearTimeout(repaginateTimer.current)
+  }, [])
 
   async function changeStatus(v: string) {
     setStatus(v)
@@ -946,12 +902,12 @@ export default function ContratoEditorPage({ contrato }: Props) {
     setShowTableDialog(false)
     const r = parseInt(tableRows) || 3
     const c = parseInt(tableCols) || 3
-    activeEditor?.chain().focus().insertTable({ rows: r, cols: c, withHeaderRow: true }).run()
+    editor?.chain().focus().insertTable({ rows: r, cols: c, withHeaderRow: true }).run()
   }
 
   function handleImageUrl() {
     if (!imageUrl.trim()) return
-    activeEditor?.chain().focus().setImage({ src: imageUrl.trim() }).run()
+    editor?.chain().focus().setImage({ src: imageUrl.trim() }).run()
     setImageUrl('')
     setShowImageDialog(false)
   }
@@ -961,7 +917,7 @@ export default function ContratoEditorPage({ contrato }: Props) {
     const reader = new FileReader()
     reader.onload = e => {
       const src = e.target?.result as string
-      activeEditor?.chain().focus().setImage({ src }).run()
+      editor?.chain().focus().setImage({ src }).run()
       setShowImageDialog(false)
     }
     reader.readAsDataURL(file)
@@ -1076,45 +1032,28 @@ export default function ContratoEditorPage({ contrato }: Props) {
           </button>
         </div>
 
-        {/* Toolbar — uses whichever page editor the user last focused */}
         <Toolbar
-          editor={activeEditor}
+          editor={editor}
           onInsertTable={() => setShowTableDialog(true)}
           onInsertImage={() => setShowImageDialog(true)}
         />
 
-        {/* Document area */}
+        {/* Document area — single scrolling editor, gray outer, white A4 column */}
         <div className="flex-1 overflow-y-auto" style={{ background: '#e2e8f0' }}>
-          <div className="py-10" style={{ paddingLeft: 60, paddingRight: 60 }}>
+          <div style={{ padding: '40px 60px 80px' }}>
             <div className="mx-auto" style={{ maxWidth: 794 }}>
-
-              {/* Pages — each is a real A4 card with overflow:hidden */}
-              {!pagesReady ? (
-                <div style={{ background: 'white', boxShadow: '0 2px 16px rgba(0,0,0,0.10)', height: PAGE_H, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                </div>
-              ) : pages.map((pageHtml, i) => (
-                <PageEditorInstance
-                  key={i}
-                  initialContent={pageHtml}
-                  pageIndex={i}
-                  onUpdate={html => handlePageUpdate(html, i)}
-                  onFocus={ed => setActiveEditor(ed)}
-                />
-              ))}
-
-              {/* Add page button */}
-              {pagesReady && (
-                <div className="no-print flex justify-center mb-6">
-                  <button
-                    onClick={handleAddPage}
-                    className="flex items-center gap-2 px-6 py-3 text-sm text-gray-500 hover:text-blue-600 transition-colors"
-                    style={{ background: 'white', border: '2px dashed #d1d5db', borderRadius: 12 }}
-                  >
-                    + Adicionar página
-                  </button>
-                </div>
-              )}
+              <FloatingToolbar editor={editor} />
+              <div
+                className="print-paper"
+                style={{
+                  background: 'white',
+                  boxShadow: '0 2px 16px rgba(0,0,0,0.10)',
+                  padding: `${PAGE_M}px`,
+                  minHeight: PAGE_H,
+                }}
+              >
+                <EditorContent editor={editor} />
+              </div>
 
 
             </div>
