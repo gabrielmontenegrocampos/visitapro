@@ -27,7 +27,7 @@ import {
   List, ListOrdered, AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Undo2, Redo2, Printer, CheckCircle, Loader2, ChevronDown,
   Table2, Image as ImageIcon, Minus,
-  Scissors, ChevronUp,
+  Scissors,
   Trash2,
   Highlighter,
 } from 'lucide-react'
@@ -564,49 +564,6 @@ function Toolbar({
   )
 }
 
-// ── Mini header/footer editor ─────────────────────────────────────────────────
-
-function ZoneEditor({
-  label, placeholder, content, onSave, icon,
-}: { label: string; placeholder: string; content: string | null; onSave: (html: string) => void; icon: React.ReactNode }) {
-  const [visible, setVisible] = useState(!!content)
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const ed = useEditor({
-    extensions: [
-      StarterKit.configure({ heading: false }),
-      TextAlign.configure({ types: ['paragraph'] }),
-      Underline, TextStyle, Color, FontFamily, FontSize,
-      Placeholder.configure({ placeholder }),
-    ],
-    content: content ?? '',
-    onUpdate: ({ editor }) => {
-      if (saveTimer.current) clearTimeout(saveTimer.current)
-      saveTimer.current = setTimeout(() => onSave(editor.getHTML()), 1500)
-    },
-  })
-
-  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current) }, [])
-
-  return (
-    <div className={`zone-editor border-x border-gray-200 ${label === 'Cabeçalho' ? 'border-t rounded-t-none' : 'border-b rounded-b-none'}`}
-      style={{ background: label === 'Cabeçalho' ? '#f8faff' : '#fafaf8' }}>
-      <button
-        type="button"
-        onClick={() => setVisible(v => !v)}
-        className="w-full flex items-center justify-between px-4 py-2 text-xs font-medium text-gray-500 hover:text-gray-700"
-      >
-        <span className="flex items-center gap-1.5">{icon} {label}</span>
-        {visible ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-      </button>
-      {visible && (
-        <div className="border-t border-dashed border-gray-300 px-20 py-3">
-          <EditorContent editor={ed} className="min-h-[40px] text-sm text-gray-600 outline-none" />
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Floating selection toolbar (shows only when mouse hovers over selection) ──
 
 function FloatingToolbar({ editor }: { editor: ReturnType<typeof useEditor> | null }) {
@@ -832,9 +789,12 @@ interface PageEditorProps {
 }
 
 function PageEditorInstance({ initialContent, pageIndex, onUpdate, onFocus }: PageEditorProps) {
+  // Lock initial content so Tiptap never sees prop updates (prevents cursor reset on Enter/Backspace)
+  const initRef = useRef(initialContent)
+
   const editor = useEditor({
     extensions: makeExtensions(pageIndex === 0 ? 'Comece a editar o contrato...' : ''),
-    content: initialContent,
+    content: initRef.current,
     editorProps: {
       attributes: {
         class: 'outline-none',
