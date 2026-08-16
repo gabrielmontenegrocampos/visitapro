@@ -1174,15 +1174,6 @@ export default function ContratoEditorPage({ contrato }: Props) {
           <div className="py-10" style={{ paddingLeft: 60, paddingRight: 60 }}>
             <div className="mx-auto" style={{ maxWidth: 794 }}>
 
-              {/* Header zone */}
-              <ZoneEditor
-                label="Cabeçalho"
-                placeholder="Digite o cabeçalho do documento..."
-                content={contrato.header_content}
-                onSave={html => saveContratoHeader(contrato.id, html)}
-                icon={<LayoutTemplate className="w-3 h-3" />}
-              />
-
               {/* Pages — each is a real A4 card with overflow:hidden */}
               {!pagesReady ? (
                 <div style={{ background: 'white', boxShadow: '0 2px 16px rgba(0,0,0,0.10)', height: PAGE_H, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1215,14 +1206,6 @@ export default function ContratoEditorPage({ contrato }: Props) {
                 </div>
               )}
 
-              {/* Footer zone */}
-              <ZoneEditor
-                label="Rodapé"
-                placeholder="Digite o rodapé do documento..."
-                content={contrato.footer_content}
-                onSave={html => saveContratoFooter(contrato.id, html)}
-                icon={<PanelBottom className="w-3 h-3" />}
-              />
 
             </div>
           </div>
