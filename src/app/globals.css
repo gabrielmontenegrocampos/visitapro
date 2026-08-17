@@ -3,6 +3,7 @@
 @layer base {
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
+  a, button, [role="button"] { cursor: pointer; }
 }
 
 @layer components {
@@ -17,6 +18,9 @@
 
 .kanban-scroll::-webkit-scrollbar { height: 6px; }
 .kanban-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* Suppress CasualOffice cloud-auth error toasts — we don't use their cloud services */
+.docx-notification-container { display: none !important; }
 .kanban-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
 
 .fc .fc-toolbar-title { font-size: 1rem !important; font-weight: 600 !important; }
@@ -28,6 +32,35 @@
 /* Mobile calendar tweaks */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── Print / PDF ──────────────────────────────────────────────────────────── */
+@media print {
+  /* Oculta toda a UI do app */
+  aside, header, nav, footer,
+  .no-print { display: none !important; }
+
+  /* Remove scroll/overflow do layout */
+  body, html { overflow: visible !important; background: white !important; }
+  main { padding: 0 !important; overflow: visible !important; height: auto !important; }
+
+  /* Mostra o cabeçalho de impressão */
+  .print-show { display: block !important; }
+
+  /* Isola o conteúdo do relatório */
+  body * { visibility: hidden; }
+  #financeiro-relatorio-print,
+  #financeiro-relatorio-print * { visibility: visible; }
+  #financeiro-relatorio-print {
+    position: absolute;
+    left: 0; top: 0;
+    width: 100%;
+    padding: 24px;
+  }
+
+  /* Garante que tabelas não quebrem no meio de linhas */
+  tr { page-break-inside: avoid; }
+  .page-break { page-break-before: always; }
+}
 
 @media (max-width: 767px) {
   .fc .fc-toolbar { flex-wrap: nowrap; gap: 4px; }
