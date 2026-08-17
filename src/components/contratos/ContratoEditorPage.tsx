@@ -75,9 +75,8 @@ export default function ContratoEditorPage({ contrato, docxUrl }: Props) {
     if (!editorRef.current) return
     setSaveStatus('saving')
     try {
-      const blob: Blob | null = await editorRef.current.save()
-      if (!blob) { setSaveStatus('idle'); return }
-      const buf = await blob.arrayBuffer()
+      const buf: ArrayBuffer | null = await editorRef.current.save()
+      if (!buf) { setSaveStatus('idle'); return }
       const base64 = arrayBufferToBase64(buf)
       const result = await saveContratoDocx(contrato.id, base64)
       if (result.error) {
