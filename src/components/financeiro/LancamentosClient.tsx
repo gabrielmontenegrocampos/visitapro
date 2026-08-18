@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Plus, Pencil, Trash2, ArrowUpRight, ArrowDownRight, Filter, X, RefreshCw } from 'lucide-react'
+import { Plus, Pencil, Trash2, ArrowUpRight, ArrowDownRight, X, RefreshCw, Search, SlidersHorizontal } from 'lucide-react'
 import Link from 'next/link'
 import type { CategoriaFinanceira } from '@/types/database'
 import { deleteLancamento, cancelarRecorrencia } from '@/app/(crm)/financeiro/actions'
@@ -52,20 +52,47 @@ export default function LancamentosClient({ lancamentos: initial, categorias, pr
   const [cancelingRecorr, setCancelingRecorr] = useState(false)
 
   // Filtros
-  const [filtroTipo, setFiltroTipo] = useState('')
+  const [search, setSearch] = useState('')
+  const [filtroTipo, setFiltroTipo] = useState<'' | 'receita' | 'despesa'>('')
   const [filtroDivisao, setFiltroDivisao] = useState('')
-  const [filtroStatus, setFiltroStatus] = useState('')
+  const [filtroStatus, setFiltroStatus] = useState<'' | 'pago' | 'pendente' | 'cancelado'>('')
   const [filtroMes, setFiltroMes] = useState('')
+  const [filtroCategoria, setFiltroCategoria] = useState('')
+  const [filtroProjeto, setFiltroProjeto] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+
+  const meses = useMemo(() => {
+    const set = new Set(lancamentos.map(l => l.data.slice(0, 7)))
+    return Array.from(set).sort().reverse()
+  }, [lancamentos])
+
+  const categoriasDisponiveis = useMemo(() => {
+    const map = new Map<string, string>()
+    lancamentos.forEach(l => { if (l.categorias_financeiras) map.set(l.categorias_financeiras.id, l.categorias_financeiras.nome) })
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]))
+  }, [lancamentos])
 
   const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim()
     return lancamentos.filter(l => {
+      if (q && !l.descricao?.toLowerCase().includes(q) && !l.categorias_financeiras?.nome?.toLowerCase().includes(q) && !l.projetos_diario?.nome?.toLowerCase().includes(q)) return false
       if (filtroTipo && l.tipo !== filtroTipo) return false
       if (filtroDivisao && l.divisao !== filtroDivisao) return false
       if (filtroStatus && l.status !== filtroStatus) return false
       if (filtroMes && !l.data.startsWith(filtroMes)) return false
+      if (filtroCategoria && l.categorias_financeiras?.id !== filtroCategoria) return false
+      if (filtroProjeto && l.projetos_diario?.id !== filtroProjeto) return false
       return true
     })
-  }, [lancamentos, filtroTipo, filtroDivisao, filtroStatus, filtroMes])
+  }, [lancamentos, search, filtroTipo, filtroDivisao, filtroStatus, filtroMes, filtroCategoria, filtroProjeto])
+
+  const hasFilters = search || filtroTipo || filtroDivisao || filtroStatus || filtroMes || filtroCategoria || filtroProjeto
+  const activeCount = [search, filtroTipo, filtroDivisao, filtroStatus, filtroMes, filtroCategoria, filtroProjeto].filter(Boolean).length
+
+  function clearFilters() {
+    setSearch(''); setFiltroTipo(''); setFiltroDivisao(''); setFiltroStatus('')
+    setFiltroMes(''); setFiltroCategoria(''); setFiltroProjeto('')
+  }
 
   const totalReceitas = filtered.filter(l => l.tipo === 'receita' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
   const totalDespesas = filtered.filter(l => l.tipo === 'despesa' && l.status === 'pago').reduce((s, l) => s + Number(l.valor), 0)
@@ -93,12 +120,6 @@ export default function LancamentosClient({ lancamentos: initial, categorias, pr
     setEditTarget(null)
     window.location.reload()
   }
-
-  // Meses disponíveis para filtro
-  const meses = useMemo(() => {
-    const set = new Set(lancamentos.map(l => l.data.slice(0, 7)))
-    return Array.from(set).sort().reverse()
-  }, [lancamentos])
 
   return (
     <div className="space-y-4">
@@ -135,44 +156,131 @@ export default function LancamentosClient({ lancamentos: initial, categorias, pr
         </div>
       </div>
 
-      {/* Filtros */}
-      <div className="bg-white rounded-xl border border-gray-100 p-3 flex flex-wrap gap-2 items-center">
-        <Filter size={14} className="text-gray-400 shrink-0" />
-        <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
-          <option value="">Todos os tipos</option>
-          <option value="receita">Receita</option>
-          <option value="despesa">Despesa</option>
-        </select>
-        <select value={filtroDivisao} onChange={e => setFiltroDivisao(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
-          <option value="">Todas as divisões</option>
-          <option value="administracao">Administração</option>
-          <option value="obra">Obra</option>
-        </select>
-        <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
-          <option value="">Todos os status</option>
-          <option value="pago">Pago</option>
-          <option value="pendente">Pendente</option>
-          <option value="cancelado">Cancelado</option>
-        </select>
-        <select value={filtroMes} onChange={e => setFiltroMes(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
-          <option value="">Todos os meses</option>
-          {meses.map(m => (
-            <option key={m} value={m}>
-              {new Date(m + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-            </option>
-          ))}
-        </select>
-        {(filtroTipo || filtroDivisao || filtroStatus || filtroMes) && (
-          <button onClick={() => { setFiltroTipo(''); setFiltroDivisao(''); setFiltroStatus(''); setFiltroMes('') }}
-            className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1">
-            <X size={12} /> Limpar
-          </button>
+      {/* Barra de busca + botão filtros */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por descrição, categoria ou obra…"
+            className="w-full pl-8 pr-8 py-2.5 text-sm bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <X size={13} />
+            </button>
+          )}
+        </div>
+        <button
+          onClick={() => setShowFilters(v => !v)}
+          className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium border transition-colors shadow-sm ${showFilters || (hasFilters && !search) ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
+        >
+          <SlidersHorizontal size={14} />
+          Filtros
+          {activeCount > (search ? 1 : 0) && (
+            <span className="w-4 h-4 bg-blue-600 text-white rounded-full text-[10px] flex items-center justify-center leading-none">
+              {activeCount - (search ? 1 : 0)}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Painel de filtros */}
+      {showFilters && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {/* Tipo */}
+            <div className="flex gap-1">
+              {([['', 'Todos'], ['receita', 'Receitas'], ['despesa', 'Despesas']] as const).map(([val, label]) => (
+                <button key={val} onClick={() => setFiltroTipo(val as typeof filtroTipo)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${filtroTipo === val ? (val === 'receita' ? 'bg-green-100 text-green-700' : val === 'despesa' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-700') : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Status */}
+            <div className="flex gap-1">
+              {([['', 'Todos status'], ['pago', 'Pago'], ['pendente', 'Pendente'], ['cancelado', 'Cancelado']] as const).map(([val, label]) => (
+                <button key={val} onClick={() => setFiltroStatus(val as typeof filtroStatus)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${filtroStatus === val ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Divisão */}
+            <div className="flex gap-1">
+              {([['', 'Todas divisões'], ['obra', 'Obra'], ['administracao', 'Administração']] as const).map(([val, label]) => (
+                <button key={val} onClick={() => setFiltroDivisao(val)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${filtroDivisao === val ? (val === 'obra' ? 'bg-orange-100 text-orange-700' : val === 'administracao' ? 'bg-blue-100 text-blue-700' : 'bg-gray-800 text-white') : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {/* Mês */}
+            {meses.length > 0 && (
+              <select value={filtroMes} onChange={e => setFiltroMes(e.target.value)}
+                className="px-2.5 py-1.5 rounded-lg text-xs bg-gray-50 border border-gray-200 text-gray-600 outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer">
+                <option value="">Todos os meses</option>
+                {meses.map(m => (
+                  <option key={m} value={m}>
+                    {new Date(m + '-01T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {/* Categoria */}
+            {categoriasDisponiveis.length > 0 && (
+              <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}
+                className="px-2.5 py-1.5 rounded-lg text-xs bg-gray-50 border border-gray-200 text-gray-600 outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer">
+                <option value="">Todas categorias</option>
+                {categoriasDisponiveis.map(([id, nome]) => (
+                  <option key={id} value={id}>{nome}</option>
+                ))}
+              </select>
+            )}
+
+            {/* Obra / Projeto */}
+            {projetos.length > 0 && (
+              <select value={filtroProjeto} onChange={e => setFiltroProjeto(e.target.value)}
+                className="px-2.5 py-1.5 rounded-lg text-xs bg-gray-50 border border-gray-200 text-gray-600 outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer max-w-[220px]">
+                <option value="">Todas as obras</option>
+                {projetos.map(p => (
+                  <option key={p.id} value={p.id}>{p.nome}</option>
+                ))}
+              </select>
+            )}
+
+            {hasFilters && (
+              <button onClick={clearFilters} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+                <X size={11} /> Limpar tudo
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Contador */}
+      <div className="flex items-center justify-between text-xs text-gray-400 px-1">
+        <span>
+          {hasFilters ? `${filtered.length} de ${lancamentos.length} lançamentos` : `${lancamentos.length} lançamentos`}
+        </span>
+        {hasFilters && filtered.length > 0 && (
+          <div className="flex gap-4">
+            {filtered.some(l => l.tipo === 'receita') && (
+              <span className="text-green-600 font-semibold">+{fmt(filtered.filter(l => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0))}</span>
+            )}
+            {filtered.some(l => l.tipo === 'despesa') && (
+              <span className="text-red-500 font-semibold">-{fmt(filtered.filter(l => l.tipo === 'despesa').reduce((s, l) => s + Number(l.valor), 0))}</span>
+            )}
+          </div>
         )}
-        <span className="ml-auto text-xs text-gray-400">{filtered.length} lançamento{filtered.length !== 1 ? 's' : ''}</span>
       </div>
 
       {/* Tabela */}
