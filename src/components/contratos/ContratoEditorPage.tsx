@@ -168,7 +168,7 @@ export default function ContratoEditorPage({ contrato, docxUrl }: Props) {
         <div className="flex items-center gap-1.5 text-xs text-gray-400 shrink-0 w-28 justify-end">
           {saveStatus === 'saving' && <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Salvando…</span></>}
           {saveStatus === 'saved' && <><CheckCircle className="w-3.5 h-3.5 text-green-500" /><span className="text-green-600">Salvo</span></>}
-          {saveStatus === 'error' && <><AlertCircle className="w-3.5 h-3.5 text-red-500" title={saveError ?? 'Erro desconhecido'} /><span className="text-red-600 truncate max-w-[180px]" title={saveError ?? ''}>{saveError ? saveError.slice(0, 40) : 'Erro'}</span></>}
+          {saveStatus === 'error' && <><AlertCircle className="w-3.5 h-3.5 text-red-500" /><span className="text-red-600 truncate max-w-[180px]" title={saveError ?? ''}>{saveError ? saveError.slice(0, 40) : 'Erro'}</span></>}
           {saveStatus === 'idle' && lastSaved && <span>{lastSaved.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>}
         </div>
 
